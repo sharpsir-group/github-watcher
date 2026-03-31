@@ -1,0 +1,9 @@
+# Secrets and credentials
+.secrets
+.aws-credentials
+
+# Deployment logs
+logs/
+
+# Node
+node_modules/
