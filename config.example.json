@@ -1,0 +1,37 @@
+{
+  "repos": {
+    "your-org/your-app": {
+      "name": "My App",
+      "localPath": "/home/deploy/your-app",
+      "deployPath": "/var/www/your-app",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig({",
+          "replace": "export default defineConfig({\n  base: \"/app/\","
+        }
+      ],
+      "buildCmd": "npm install && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {
+        "distributionId": "E1XXXXXXXXXX",
+        "invalidationPaths": ["/*"]
+      },
+      "secret": "WEBHOOK_SECRET_MY_APP"
+    },
+    "your-org/api-service": {
+      "name": "API Service",
+      "localPath": "/home/deploy/api-service",
+      "deployPath": "/var/www/api",
+      "branch": "production",
+      "preBuild": [],
+      "buildCmd": "npm ci && npm run build",
+      "distFolder": "build",
+      "postDeploy": ["pm2 restart api-service"],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_API"
+    }
+  }
+}

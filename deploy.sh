@@ -1,7 +1,7 @@
 #!/bin/bash
 # Universal Deploy Script for GitHub Watcher
 # Usage: deploy.sh <repo-key>
-# Example: deploy.sh "sharpsir-group/1gh-of-hungary-sotheby-s-website"
+# Example: deploy.sh "your-org/your-repo"
 
 set -e
 
