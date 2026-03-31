@@ -17,9 +17,9 @@
 
 ## Why
 
-You push to `main`. Your site is live 30 seconds later. No GitHub Actions YAML, no build minutes to burn, no vendor lock-in.
+We build apps in [Lovable](https://lovable.dev), which syncs every change to a GitHub repo. GitHub Watcher bridges the gap between Lovable's cloud development and our self-hosted infrastructure: every time Lovable pushes to `main`, this server pulls the code, patches it for our subpath deployment (e.g. `/hrms/`, `/pipeline/`), builds it, and copies the output to the web server -- all without touching the Lovable project files.
 
-GitHub Watcher is a single Node.js process that receives GitHub webhook events, pulls your code, builds it, and deploys it -- all from a JSON config file.
+No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a single Node.js process, a JSON config, and a GitHub webhook.
 
 ## Features
 
@@ -75,7 +75,7 @@ Edit `config.json` with your repositories:
       "deployPath": "/var/www/my-app",
       "branch": "main",
       "preBuild": [],
-      "buildCmd": "npm ci && npm run build",
+      "buildCmd": "npm install --include=dev && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -84,6 +84,8 @@ Edit `config.json` with your repositories:
   }
 }
 ```
+
+> **Note:** Use `npm install --include=dev` instead of `npm ci` in `buildCmd`. PM2 sets `NODE_ENV=production`, which causes `npm install` / `npm ci` to skip devDependencies (including build tools like Vite). The `--include=dev` flag ensures they are always installed.
 
 ### 3. Add secrets
 
@@ -128,6 +130,19 @@ Go to your repository **Settings > Webhooks > Add webhook**:
 | Secret | The value from your `.secrets` file |
 | Events | Just the `push` event |
 
+Or use the GitHub CLI:
+
+```bash
+gh api repos/your-org/your-repo/hooks --method POST \
+  -f 'name=web' \
+  -f 'config[url]=https://your-server/webhook/github-watcher' \
+  -f 'config[content_type]=json' \
+  -f 'config[secret]=YOUR_SECRET_VALUE' \
+  -f 'config[insecure_ssl]=0' \
+  -f 'events[]=push' \
+  -F 'active=true'
+```
+
 ## Configuration Reference
 
 ### Repository Config (`config.json`)
@@ -160,6 +175,32 @@ Patches let you modify source files before build without polluting your git hist
   ]
 }
 ```
+
+#### Deploying SPAs to a Subpath
+
+When deploying a Vite + React Router app to a subpath (e.g. `/app/`), two patches are needed:
+
+1. **Vite `base`** -- so asset URLs (JS, CSS, images) resolve correctly
+2. **React Router `basename`** -- so the client-side router matches routes under the subpath
+
+```json
+{
+  "preBuild": [
+    {
+      "file": "vite.config.ts",
+      "find": "export default defineConfig(({ mode }) => ({",
+      "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/app/\","
+    },
+    {
+      "file": "src/App.tsx",
+      "find": "<BrowserRouter>",
+      "replace": "<BrowserRouter basename=\"/app\">"
+    }
+  ]
+}
+```
+
+Without the `basename` patch, the app will load but the router will show a 404 because it doesn't know its routes are prefixed.
 
 ### CloudFront Invalidation
 
@@ -207,6 +248,44 @@ When a valid push event is received, the deploy script runs these steps in order
 8. **CDN invalidation** -- create CloudFront invalidation if configured
 
 If the build fails at any step, patches are reverted and the deploy is aborted.
+
+## Reverse Proxy Setup
+
+In production, place the webhook server behind a reverse proxy (Apache, Nginx) with TLS.
+
+### Apache
+
+```apache
+ProxyPass /webhook/github-watcher http://127.0.0.1:9001/
+ProxyPassReverse /webhook/github-watcher http://127.0.0.1:9001/
+```
+
+GitHub webhook Payload URL: `https://your-domain/webhook/github-watcher`
+
+### SPA `.htaccess`
+
+Each deploy path serving a single-page app needs an `.htaccess` for client-side routing:
+
+```apache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /app/
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /app/index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "^index\.html$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+    <FilesMatch "\.(js|css|woff2)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+```
+
+> **Note:** `deploy.sh` runs `rm -rf "$DEPLOY_PATH"/*` before copying, but the `*` glob does not match dotfiles, so `.htaccess` survives redeploys.
 
 ## Running with PM2
 
