@@ -38,15 +38,15 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 ## Architecture
 
 ```
-GitHub ──webhook POST──▶ webhook-server.js ──spawn──▶ deploy.sh
-                              │                           │
-                         config.json                 git pull
-                         .secrets                    pre-build patches
-                                                     build
-                                                     copy to deploy path
-                                                     post-deploy hooks
-                                                     revert patches
-                                                     CloudFront invalidation
+Lovable ──push──▶ GitHub ──webhook POST──▶ webhook-server.js ──spawn──▶ deploy.sh
+                                                │                           │
+                                           config.json                 git pull
+                                           .secrets                    pre-build patches
+                                                                       build
+                                                                       copy to deploy path
+                                                                       post-deploy hooks
+                                                                       revert patches
+                                                                       CloudFront invalidation
 ```
 
 ## Quick Start
