@@ -2,6 +2,9 @@
 .secrets
 .aws-credentials
 
+# Instance-specific config (use config.example.json as template)
+config.json
+
 # Deployment logs
 logs/
 
