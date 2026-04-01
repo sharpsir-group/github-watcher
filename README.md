@@ -196,6 +196,11 @@ Patches let you modify source files before build without polluting your git hist
       "file": "vite.config.ts",
       "find": "export default defineConfig({",
       "replace": "export default defineConfig({\n  base: \"/app/\","
+    },
+    {
+      "file": "src/lib/matrix-sso.ts",
+      "find": "const BASE_PATH = '/matrix-apps-template'",
+      "replace": "const BASE_PATH = '/app'"
     }
   ]
 }
@@ -203,10 +208,11 @@ Patches let you modify source files before build without polluting your git hist
 
 ##### Deploying SPAs to a Subpath
 
-When deploying a Vite + React Router app to a subpath (e.g. `/app/`), two patches are needed:
+When deploying a Vite + React Router app to a subpath (e.g. `/app/`), three patches are typically needed:
 
 1. **Vite `base`** — so asset URLs (JS, CSS, images) resolve correctly
 2. **React Router `basename`** — so the client-side router matches routes under the subpath
+3. **SSO `BASE_PATH`** — so OAuth redirect URIs point to the correct callback URL (Matrix SSO apps only)
 
 ```json
 {
@@ -220,12 +226,19 @@ When deploying a Vite + React Router app to a subpath (e.g. `/app/`), two patche
       "file": "src/App.tsx",
       "find": "<BrowserRouter>",
       "replace": "<BrowserRouter basename=\"/app\">"
+    },
+    {
+      "file": "src/lib/matrix-sso.ts",
+      "find": "const BASE_PATH = '/matrix-apps-template'",
+      "replace": "const BASE_PATH = '/app'"
     }
   ]
 }
 ```
 
 Without the `basename` patch, the app will load but the router will show a 404 because it doesn't know its routes are prefixed.
+
+Without the `BASE_PATH` patch, the app will redirect to SSO login with the wrong `redirect_uri` (e.g. `/matrix-apps-template/auth/callback` instead of `/app/auth/callback`), causing an "Invalid redirect_uri" error after authentication.
 
 #### CloudFront Invalidation
 

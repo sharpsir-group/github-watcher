@@ -10,9 +10,19 @@
           "file": "vite.config.ts",
           "find": "export default defineConfig({",
           "replace": "export default defineConfig({\n  base: \"/app/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter>",
+          "replace": "<BrowserRouter basename=\"/app\">"
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '/matrix-apps-template'",
+          "replace": "const BASE_PATH = '/app'"
         }
       ],
-      "buildCmd": "npm install && npm run build",
+      "buildCmd": "npm install --include=dev && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {
