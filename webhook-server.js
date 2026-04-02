@@ -16,26 +16,25 @@ const path = require('path');
 const PORT = process.env.PORT || 9001;
 const SCRIPT_DIR = __dirname;
 const CONFIG_FILE = path.join(SCRIPT_DIR, 'config.json');
-const SECRETS_FILE = path.join(SCRIPT_DIR, '.secrets');
+const ENV_FILE = path.join(SCRIPT_DIR, '.env');
 const DEPLOY_SCRIPT = path.join(SCRIPT_DIR, 'deploy.sh');
-const AWS_CREDENTIALS_FILE = path.join(SCRIPT_DIR, '.aws-credentials');
 
-// Load secrets from .secrets file
-function loadSecrets() {
-    const secrets = {};
-    if (fs.existsSync(SECRETS_FILE)) {
-        const content = fs.readFileSync(SECRETS_FILE, 'utf8');
+// Load all secrets and credentials from .env file
+function loadEnv() {
+    const env = {};
+    if (fs.existsSync(ENV_FILE)) {
+        const content = fs.readFileSync(ENV_FILE, 'utf8');
         content.split('\n').forEach(line => {
             const trimmed = line.trim();
             if (trimmed && !trimmed.startsWith('#')) {
                 const [key, ...valueParts] = trimmed.split('=');
                 if (key && valueParts.length > 0) {
-                    secrets[key.trim()] = valueParts.join('=').trim();
+                    env[key.trim()] = valueParts.join('=').trim();
                 }
             }
         });
     }
-    return secrets;
+    return env;
 }
 
 // Load configuration
@@ -62,24 +61,6 @@ function verifySignature(payload, signature, secret) {
     } catch (e) {
         return false;
     }
-}
-
-// Load AWS credentials from .aws-credentials file
-function loadAwsCredentials() {
-    const creds = {};
-    if (fs.existsSync(AWS_CREDENTIALS_FILE)) {
-        const content = fs.readFileSync(AWS_CREDENTIALS_FILE, 'utf8');
-        content.split('\n').forEach(line => {
-            const trimmed = line.trim();
-            if (trimmed && !trimmed.startsWith('#')) {
-                const [key, ...valueParts] = trimmed.split('=');
-                if (key && valueParts.length > 0) {
-                    creds[key.trim()] = valueParts.join('=').trim();
-                }
-            }
-        });
-    }
-    return creds;
 }
 
 // Deploy queue: prevents concurrent deploys for the same repo
@@ -124,8 +105,7 @@ function queueDeploy(repoKey) {
 function runDeploy(repoKey, callback) {
     console.log(`[${new Date().toISOString()}] Starting deployment for: ${repoKey}`);
     
-    const awsCreds = loadAwsCredentials();
-    const secrets = loadSecrets();
+    const dotenv = loadEnv();
     
     const deploy = spawn(DEPLOY_SCRIPT, [repoKey], {
         cwd: SCRIPT_DIR,
@@ -134,10 +114,7 @@ function runDeploy(repoKey, callback) {
             ...process.env,
             PATH: '/opt/bitnami/node/bin:/usr/local/bin:/usr/bin:/bin',
             HOME: '/home/bitnami',
-            ...(awsCreds.AWS_ACCESS_KEY_ID && { AWS_ACCESS_KEY_ID: awsCreds.AWS_ACCESS_KEY_ID }),
-            ...(awsCreds.AWS_SECRET_ACCESS_KEY && { AWS_SECRET_ACCESS_KEY: awsCreds.AWS_SECRET_ACCESS_KEY }),
-            ...(awsCreds.AWS_DEFAULT_REGION && { AWS_DEFAULT_REGION: awsCreds.AWS_DEFAULT_REGION }),
-            ...(secrets.CF_API_TOKEN && { CF_API_TOKEN: secrets.CF_API_TOKEN })
+            ...dotenv
         }
     });
     
@@ -204,11 +181,11 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
         console.log(`[${timestamp}] Received webhook request`);
         
-        // Load fresh config and secrets for each request
+        // Load fresh config and env for each request
         let config, secrets;
         try {
             config = loadConfig();
-            secrets = loadSecrets();
+            secrets = loadEnv();
         } catch (e) {
             console.error(`[${timestamp}] Error loading config:`, e);
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -301,7 +278,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Started at: ${new Date().toISOString()}`);
     console.log(`Listening on: http://0.0.0.0:${PORT}`);
     console.log(`Config file: ${CONFIG_FILE}`);
-    console.log(`Secrets file: ${SECRETS_FILE}`);
+    console.log(`Env file: ${ENV_FILE}`);
     console.log('='.repeat(50));
     
     // Log configured repos
