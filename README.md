@@ -68,16 +68,31 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 ### Architecture
 
 ```mermaid
-flowchart TD
-    Lovable -->|git push| GitHub -->|webhook POST| WebhookServer["webhook-server.js + config.json + .env"]
-    WebhookServer -->|spawn| GitPull[git pull]
-    GitPull --> Patches[pre-build patches]
-    Patches --> Build[build]
-    Build --> Deploy[copy to deploy path]
-    Deploy --> PostDeploy[post-deploy hooks]
-    PostDeploy --> Revert[revert patches]
-    Revert --> CloudFront[CloudFront invalidation]
-    CloudFront --> Cloudflare[Cloudflare cache purge]
+sequenceDiagram
+    participant L as Lovable
+    participant GH as GitHub
+    participant WH as webhook-server.js
+    participant DS as deploy.sh
+    participant CF as CloudFront
+    participant CFL as Cloudflare
+
+    L->>GH: git push
+    GH->>WH: webhook POST
+    WH->>WH: verify HMAC-SHA256
+    WH->>DS: spawn
+
+    DS->>DS: git pull
+    DS->>DS: pre-build patches
+    DS->>DS: build
+    DS->>DS: copy to deploy path
+    DS->>DS: stamp index.html
+    DS->>DS: post-deploy hooks
+    DS->>DS: revert patches
+    DS->>CF: invalidation request
+    CF-->>DS: invalidation created
+    DS->>CFL: purge cache API
+    CFL-->>DS: cache purged
+    DS-->>WH: exit 0
 ```
 
 ### Quick Start
