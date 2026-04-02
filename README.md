@@ -25,6 +25,7 @@
   <img src="https://img.shields.io/badge/Apache-D22128?style=flat&logo=apache&logoColor=white" alt="Apache" />
   <img src="https://img.shields.io/badge/GitHub_Webhooks-2088FF?style=flat&logo=github&logoColor=white" alt="GitHub Webhooks" />
   <img src="https://img.shields.io/badge/CloudFront-232F3E?style=flat&logo=amazonaws&logoColor=white" alt="CloudFront" />
+  <img src="https://img.shields.io/badge/Cloudflare-F38020?style=flat&logo=cloudflare&logoColor=white" alt="Cloudflare" />
   <img src="https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white" alt="Vite" />
   <img src="https://img.shields.io/badge/Lovable-FF6B6B?style=flat&logo=heart&logoColor=white" alt="Lovable" />
 </p>
@@ -45,6 +46,7 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 | Self-hosted deploy | Needs SSH keys, runners, or third-party actions | Built-in — deploys locally |
 | Subpath SPA patching | Custom scripts in YAML | First-class `preBuild` config |
 | CloudFront invalidation | Extra action + AWS credentials in secrets | Built-in, one config key |
+| Cloudflare cache purge | Extra action + API token in secrets | Built-in, one config key |
 | Webhook secret rotation | Update repo settings + re-deploy secrets | Edit `.secrets`, restart PM2 |
 | Debugging deploys | Scroll through action logs in browser | `pm2 logs github-watcher` or `./logs/` |
 
@@ -57,6 +59,7 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 - **Pre-build patching** — apply find/replace patches before build, auto-reverted after
 - **Post-deploy hooks** — run arbitrary commands after deployment (restart services, notify, etc.)
 - **CloudFront invalidation** — optional CDN cache busting via AWS CLI
+- **Cloudflare cache purge** — optional edge + Worker Cache API purge via Cloudflare API
 - **Deploy queue** — concurrent pushes to the same repo are queued, not dropped
 - **Deploy stamping** — injects commit hash + timestamp into `index.html` for traceability
 - **Health check** — `GET /health` endpoint for uptime monitoring
@@ -69,11 +72,12 @@ Lovable ──push──▶ GitHub ──webhook POST──▶ webhook-server.js
                                                 │                           │
                                            config.json                 git pull
                                            .secrets                    pre-build patches
-                                                                       build
+                                           .aws-credentials            build
                                                                        copy to deploy path
                                                                        post-deploy hooks
                                                                        revert patches
                                                                        CloudFront invalidation
+                                                                       Cloudflare cache purge
 ```
 
 ### Quick Start
@@ -183,6 +187,7 @@ gh api repos/your-org/your-repo/hooks --method POST \
 | `distFolder` | string | Build output directory (relative to repo root) |
 | `postDeploy` | array | Shell commands to run after deployment |
 | `cloudfront` | object | Optional CloudFront CDN invalidation config |
+| `cloudflare` | object | Optional Cloudflare cache purge config |
 | `secret` | string | Key name in `.secrets` for webhook signature verification |
 
 #### Pre-Build Patches
@@ -265,6 +270,34 @@ EOF
 chmod 600 .aws-credentials
 ```
 
+#### Cloudflare Cache Purge
+
+If your site uses a Cloudflare Worker for prerendering or caching, configure automatic cache purge after deploy:
+
+```json
+{
+  "cloudflare": {
+    "zoneId": "your-zone-id",
+    "purgeEverything": true,
+    "apiTokenKey": "CF_API_TOKEN"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `zoneId` | string | Cloudflare zone ID for the domain |
+| `purgeEverything` | boolean | When `true`, purges all cached content for the zone |
+| `apiTokenKey` | string | Key name in `.secrets` whose value is the Cloudflare API token |
+
+The API token needs **Zone > Cache Purge > Purge** permission. Add it to `.secrets`:
+
+```bash
+echo 'CF_API_TOKEN=your-cloudflare-api-token' >> .secrets
+```
+
+Repos without a `cloudflare` block are unaffected — the purge step is silently skipped.
+
 ### API
 
 | Method | Path | Description |
@@ -283,7 +316,8 @@ When a valid push event is received, the deploy script runs these steps in order
 5. **Stamp** — inject deploy timestamp and commit hash into `index.html`
 6. **Post-deploy hooks** — run any configured post-deploy commands
 7. **Revert patches** — restore patched files to their original state
-8. **CDN invalidation** — create CloudFront invalidation if configured
+8. **CloudFront invalidation** — create CloudFront invalidation if configured
+9. **Cloudflare cache purge** — purge Cloudflare edge + Worker Cache API if configured
 
 If the build fails at any step, patches are reverted and the deploy is aborted.
 
