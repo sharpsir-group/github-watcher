@@ -67,17 +67,17 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 
 ### Architecture
 
-```
-Lovable ──push──▶ GitHub ──webhook POST──▶ webhook-server.js ──spawn──▶ deploy.sh
-                                                │                           │
-                                           config.json                 git pull
-                                           .env                        pre-build patches
-                                                                       build
-                                                                       copy to deploy path
-                                                                       post-deploy hooks
-                                                                       revert patches
-                                                                       CloudFront invalidation
-                                                                       Cloudflare cache purge
+```mermaid
+flowchart TD
+    Lovable -->|git push| GitHub -->|webhook POST| WebhookServer["webhook-server.js + config.json + .env"]
+    WebhookServer -->|spawn| GitPull[git pull]
+    GitPull --> Patches[pre-build patches]
+    Patches --> Build[build]
+    Build --> Deploy[copy to deploy path]
+    Deploy --> PostDeploy[post-deploy hooks]
+    PostDeploy --> Revert[revert patches]
+    Revert --> CloudFront[CloudFront invalidation]
+    CloudFront --> Cloudflare[Cloudflare cache purge]
 ```
 
 ### Quick Start
