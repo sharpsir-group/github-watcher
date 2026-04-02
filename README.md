@@ -71,8 +71,8 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 Lovable ──push──▶ GitHub ──webhook POST──▶ webhook-server.js ──spawn──▶ deploy.sh
                                                 │                           │
                                            config.json                 git pull
-                                           .secrets                    pre-build patches
-                                           .aws-credentials            build
+                                           .env                        pre-build patches
+                                                                       build
                                                                        copy to deploy path
                                                                        post-deploy hooks
                                                                        revert patches
@@ -118,17 +118,21 @@ Edit `config.json` with your repositories:
 
 > **Note:** Use `npm install --include=dev` instead of `npm ci` in `buildCmd`. PM2 sets `NODE_ENV=production`, which causes `npm install` / `npm ci` to skip devDependencies (including build tools like Vite). The `--include=dev` flag ensures they are always installed.
 
-#### 3. Add secrets
+#### 3. Create `.env`
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+Generate a webhook secret and add it:
 
 ```bash
 openssl rand -hex 32
-
-cat > .secrets << 'EOF'
-WEBHOOK_SECRET_MY_APP=<paste-generated-secret-here>
-EOF
-
-chmod 600 .secrets
+# Paste the output as WEBHOOK_SECRET_MY_APP= in .env
 ```
+
+AWS and Cloudflare credentials go in the same file (see Configuration Reference below).
 
 #### 4. Clone your target repo
 
@@ -156,7 +160,7 @@ Go to your repository **Settings > Webhooks > Add webhook**:
 |---|---|
 | Payload URL | `http://your-server:9001/` |
 | Content type | `application/json` |
-| Secret | The value from your `.secrets` file |
+| Secret | The `WEBHOOK_SECRET_*` value from your `.env` file |
 | Events | Just the `push` event |
 
 Or use the GitHub CLI:
@@ -188,7 +192,7 @@ gh api repos/your-org/your-repo/hooks --method POST \
 | `postDeploy` | array | Shell commands to run after deployment |
 | `cloudfront` | object | Optional CloudFront CDN invalidation config |
 | `cloudflare` | object | Optional Cloudflare cache purge config |
-| `secret` | string | Key name in `.secrets` for webhook signature verification |
+| `secret` | string | Key name in `.env` for webhook signature verification |
 
 #### Pre-Build Patches
 
@@ -258,16 +262,12 @@ If your deploy path is behind a CloudFront distribution, configure automatic cac
 }
 ```
 
-Requires AWS CLI installed and credentials in `.aws-credentials`:
+Requires AWS CLI installed and credentials in `.env`:
 
 ```bash
-cat > .aws-credentials << 'EOF'
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 AWS_DEFAULT_REGION=us-east-1
-EOF
-
-chmod 600 .aws-credentials
 ```
 
 #### Cloudflare Cache Purge
@@ -288,12 +288,12 @@ If your site uses a Cloudflare Worker for prerendering or caching, configure aut
 |---|---|---|
 | `zoneId` | string | Cloudflare zone ID for the domain |
 | `purgeEverything` | boolean | When `true`, purges all cached content for the zone |
-| `apiTokenKey` | string | Key name in `.secrets` whose value is the Cloudflare API token |
+| `apiTokenKey` | string | Key name in `.env` whose value is the Cloudflare API token |
 
-The API token needs **Zone > Cache Purge > Purge** permission. Add it to `.secrets`:
+The API token needs **Zone > Cache Purge > Purge** permission. Add it to `.env`:
 
 ```bash
-echo 'CF_API_TOKEN=your-cloudflare-api-token' >> .secrets
+CF_API_TOKEN=your-cloudflare-api-token
 ```
 
 Repos without a `cloudflare` block are unaffected — the purge step is silently skipped.
@@ -389,8 +389,8 @@ github-watcher/
 ├── config.example.json    # Example configuration
 ├── ecosystem.config.js    # PM2 process manager config
 ├── package.json           # npm metadata and keywords
-├── .secrets               # Webhook secrets (git-ignored, chmod 600)
-├── .aws-credentials       # AWS credentials for CloudFront (git-ignored, chmod 600)
+├── .env                   # All secrets and credentials (git-ignored, chmod 600)
+├── .env.example           # Template for .env
 ├── logs/                  # Deployment logs (git-ignored)
 └── README.md
 ```
@@ -398,8 +398,8 @@ github-watcher/
 ### Security
 
 - Webhook signatures are verified using HMAC-SHA256 (`X-Hub-Signature-256`)
-- Secrets and credentials are stored in separate files with `600` permissions
-- Sensitive files (`.secrets`, `.aws-credentials`, `config.json`, `logs/`) are git-ignored
+- All secrets and credentials live in a single `.env` file with `600` permissions
+- Sensitive files (`.env`, `config.json`, `logs/`) are git-ignored
 - Request body size is capped at 10 MB
 - The server binds to `0.0.0.0` — use a firewall or reverse proxy to restrict access
 

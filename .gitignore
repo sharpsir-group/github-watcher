@@ -1,4 +1,9 @@
-# Secrets and credentials
+# Environment (secrets, API keys, credentials)
+.env
+.env.*
+!.env.example
+
+# Legacy (pre-v1.2) — remove once all instances migrated
 .secrets
 .aws-credentials
 
