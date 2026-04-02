@@ -273,6 +273,82 @@ invalidate_cloudfront() {
     fi
 }
 
+# Function to purge Cloudflare cache (CDN + Worker Cache API)
+purge_cloudflare_cache() {
+    log "Checking Cloudflare cache purge config..."
+
+    local CF_ZONE_ID=""
+    local CF_PURGE_ALL=""
+    local CF_TOKEN_KEY=""
+
+    if [ "$USE_JQ" = true ]; then
+        CF_ZONE_ID=$(jq -r ".repos[\"$REPO_KEY\"].cloudflare.zoneId // empty" "$CONFIG_FILE")
+        CF_PURGE_ALL=$(jq -r ".repos[\"$REPO_KEY\"].cloudflare.purgeEverything // empty" "$CONFIG_FILE")
+        CF_TOKEN_KEY=$(jq -r ".repos[\"$REPO_KEY\"].cloudflare.apiTokenKey // empty" "$CONFIG_FILE")
+    else
+        CF_ZONE_ID=$(node -e "
+            const config = require('$CONFIG_FILE');
+            const repo = config.repos['$REPO_KEY'];
+            console.log((repo.cloudflare && repo.cloudflare.zoneId) || '');
+        ")
+        CF_PURGE_ALL=$(node -e "
+            const config = require('$CONFIG_FILE');
+            const repo = config.repos['$REPO_KEY'];
+            console.log((repo.cloudflare && repo.cloudflare.purgeEverything) || '');
+        ")
+        CF_TOKEN_KEY=$(node -e "
+            const config = require('$CONFIG_FILE');
+            const repo = config.repos['$REPO_KEY'];
+            console.log((repo.cloudflare && repo.cloudflare.apiTokenKey) || '');
+        ")
+    fi
+
+    if [ -z "$CF_ZONE_ID" ]; then
+        log "No Cloudflare zone configured, skipping cache purge"
+        return
+    fi
+
+    # Resolve the API token from environment variable named by apiTokenKey
+    local CF_TOKEN="${!CF_TOKEN_KEY}"
+    if [ -z "$CF_TOKEN" ]; then
+        log_warning "Cloudflare API token not found (key: $CF_TOKEN_KEY). Check .secrets file."
+        return
+    fi
+
+    if [ "$CF_PURGE_ALL" = "true" ]; then
+        log "Purging all Cloudflare cache for zone: $CF_ZONE_ID"
+        local PURGE_BODY='{"purge_everything":true}'
+    else
+        log "No purge method configured for Cloudflare zone $CF_ZONE_ID, skipping"
+        return
+    fi
+
+    local PURGE_OUTPUT
+    if PURGE_OUTPUT=$(curl -s -X POST \
+        "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+        -H "Authorization: Bearer $CF_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$PURGE_BODY" 2>&1); then
+
+        local PURGE_SUCCESS
+        PURGE_SUCCESS=$(echo "$PURGE_OUTPUT" | node -e "
+            let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
+                try { console.log(JSON.parse(d).success); } catch { console.log('false'); }
+            });
+        ")
+
+        if [ "$PURGE_SUCCESS" = "true" ]; then
+            log_success "Cloudflare cache purged successfully"
+        else
+            log_warning "Cloudflare cache purge returned error"
+            log_warning "$PURGE_OUTPUT"
+        fi
+    else
+        log_warning "Cloudflare cache purge request failed"
+        log_warning "$PURGE_OUTPUT"
+    fi
+}
+
 # Main deployment process
 main() {
     log "========================================="
@@ -334,9 +410,14 @@ main() {
     log_success "Patches reverted"
     
     # Step 7: Invalidate CloudFront cache
-    log "Step 7: Invalidating CDN cache..."
+    log "Step 7: Invalidating CloudFront cache..."
     invalidate_cloudfront
-    log_success "CDN invalidation step completed"
+    log_success "CloudFront invalidation step completed"
+    
+    # Step 8: Purge Cloudflare cache (prerendered HTML + CDN)
+    log "Step 8: Purging Cloudflare cache..."
+    purge_cloudflare_cache
+    log_success "Cloudflare cache purge step completed"
     
     log "========================================="
     log_success "Deployment completed successfully!"

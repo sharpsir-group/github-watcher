@@ -29,6 +29,11 @@
         "distributionId": "E1XXXXXXXXXX",
         "invalidationPaths": ["/*"]
       },
+      "cloudflare": {
+        "zoneId": "your-zone-id",
+        "purgeEverything": true,
+        "apiTokenKey": "CF_API_TOKEN"
+      },
       "secret": "WEBHOOK_SECRET_MY_APP"
     },
     "your-org/api-service": {

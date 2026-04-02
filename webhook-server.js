@@ -125,6 +125,7 @@ function runDeploy(repoKey, callback) {
     console.log(`[${new Date().toISOString()}] Starting deployment for: ${repoKey}`);
     
     const awsCreds = loadAwsCredentials();
+    const secrets = loadSecrets();
     
     const deploy = spawn(DEPLOY_SCRIPT, [repoKey], {
         cwd: SCRIPT_DIR,
@@ -135,7 +136,8 @@ function runDeploy(repoKey, callback) {
             HOME: '/home/bitnami',
             ...(awsCreds.AWS_ACCESS_KEY_ID && { AWS_ACCESS_KEY_ID: awsCreds.AWS_ACCESS_KEY_ID }),
             ...(awsCreds.AWS_SECRET_ACCESS_KEY && { AWS_SECRET_ACCESS_KEY: awsCreds.AWS_SECRET_ACCESS_KEY }),
-            ...(awsCreds.AWS_DEFAULT_REGION && { AWS_DEFAULT_REGION: awsCreds.AWS_DEFAULT_REGION })
+            ...(awsCreds.AWS_DEFAULT_REGION && { AWS_DEFAULT_REGION: awsCreds.AWS_DEFAULT_REGION }),
+            ...(secrets.CF_API_TOKEN && { CF_API_TOKEN: secrets.CF_API_TOKEN })
         }
     });
     
