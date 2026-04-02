@@ -68,19 +68,34 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 ### Architecture
 
 ```mermaid
-graph LR
-    A[Lovable] -->|push| B[GitHub]
-    B -->|webhook POST| C[webhook-server.js]
-    C -->|spawn| D[deploy.sh]
-    C -.- E["config.json + .env"]
-    D --> F[git pull]
-    F --> G[pre-build patches]
-    G --> H[build]
-    H --> I[copy to deploy path]
-    I --> J[post-deploy hooks]
-    J --> K[revert patches]
-    K --> L[CloudFront invalidation]
-    L --> M[Cloudflare cache purge]
+flowchart LR
+    subgraph trigger ["Trigger"]
+        L[Lovable] -->|push| GH[GitHub]
+    end
+
+    subgraph server ["Webhook Server"]
+        WH[webhook-server.js]
+        CFG["config.json + .env"]
+        WH -.- CFG
+    end
+
+    subgraph pipeline ["Deploy Pipeline · deploy.sh"]
+        direction TB
+        P[git pull] --> PA[pre-build patches]
+        PA --> BU[build]
+        BU --> CP[copy to deploy path]
+        CP --> PD[post-deploy hooks]
+        PD --> RV[revert patches]
+    end
+
+    subgraph cache ["Cache Invalidation"]
+        direction TB
+        CFI[CloudFront] --> CFC[Cloudflare]
+    end
+
+    GH -->|webhook POST| WH
+    WH -->|spawn| P
+    RV --> CFI
 ```
 
 ### Quick Start
