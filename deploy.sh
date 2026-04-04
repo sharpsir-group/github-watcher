@@ -134,32 +134,43 @@ apply_patches() {
     for ((i=0; i<PATCH_COUNT; i++)); do
         if [ "$USE_JQ" = true ]; then
             PATCH_FILE=$(echo "$PRE_BUILD" | jq -r ".[$i].file")
-            PATCH_FIND=$(echo "$PRE_BUILD" | jq -r ".[$i].find")
-            PATCH_REPLACE=$(echo "$PRE_BUILD" | jq -r ".[$i].replace")
         else
             PATCH_FILE=$(node -e "console.log(($PRE_BUILD)[$i].file)")
-            PATCH_FIND=$(node -e "console.log(($PRE_BUILD)[$i].find)")
-            PATCH_REPLACE=$(node -e "console.log(($PRE_BUILD)[$i].replace)")
         fi
         
         FULL_PATH="$LOCAL_PATH/$PATCH_FILE"
         
         if [ -f "$FULL_PATH" ]; then
-            # Store original content
-            ORIGINAL_FILES["$PATCH_FILE"]=$(cat "$FULL_PATH")
+            # Store original content (only first time per file)
+            if [ -z "${ORIGINAL_FILES[$PATCH_FILE]+x}" ]; then
+                ORIGINAL_FILES["$PATCH_FILE"]=$(cat "$FULL_PATH")
+            fi
             
-            # Apply patch using node for reliable string replacement
+            # Apply patch via node — reads config.json directly to avoid
+            # bash escaping issues with regex special characters.
             node -e "
                 const fs = require('fs');
-                const content = fs.readFileSync('$FULL_PATH', 'utf8');
-                const find = \`$PATCH_FIND\`;
-                const replace = \`$PATCH_REPLACE\`;
-                if (content.includes(find)) {
-                    const newContent = content.replace(find, replace);
-                    fs.writeFileSync('$FULL_PATH', newContent);
-                    console.log('Patched: $PATCH_FILE');
+                const config = require('$CONFIG_FILE');
+                const patch = config.repos['$REPO_KEY'].preBuild[$i];
+                const filePath = '$FULL_PATH';
+                const content = fs.readFileSync(filePath, 'utf8');
+
+                if (patch.regex) {
+                    const re = new RegExp(patch.find, 'g');
+                    if (re.test(content)) {
+                        re.lastIndex = 0;
+                        fs.writeFileSync(filePath, content.replace(re, patch.replace));
+                        console.log('Patched (regex): $PATCH_FILE');
+                    } else {
+                        console.log('Regex not matched in $PATCH_FILE (may already be correct)');
+                    }
                 } else {
-                    console.log('Pattern not found in $PATCH_FILE (may already be patched)');
+                    if (content.includes(patch.find)) {
+                        fs.writeFileSync(filePath, content.replace(patch.find, patch.replace));
+                        console.log('Patched: $PATCH_FILE');
+                    } else {
+                        console.log('Pattern not found in $PATCH_FILE (may already be patched)');
+                    }
                 }
             "
         else

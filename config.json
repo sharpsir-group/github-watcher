@@ -1,0 +1,148 @@
+{
+  "repos": {
+    "sharpsir-group/itsm-2-1": {
+      "name": "ITSM",
+      "localPath": "/home/bitnami/itsm-2-1",
+      "deployPath": "/opt/bitnami/apache/htdocs/itsm",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/itsm/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/itsm\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/itsm'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_ITSM"
+    },
+    "sharpsir-group/smfinance-844e2701": {
+      "name": "Financial Management",
+      "localPath": "/home/bitnami/matrix-fm",
+      "deployPath": "/opt/bitnami/apache/htdocs/fm",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/fm/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/fm\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/fm'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_FM"
+    },
+    "sharpsir-group/matrix-hrms": {
+      "name": "HRMS",
+      "localPath": "/home/bitnami/matrix-hrms",
+      "deployPath": "/opt/bitnami/apache/htdocs/hrms",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/hrms/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/hrms\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/hrms'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_HRMS"
+    },
+    "sharpsir-group/smpipeline": {
+      "name": "Pipeline",
+      "localPath": "/home/bitnami/matrix-pipeline",
+      "deployPath": "/opt/bitnami/apache/htdocs/pipeline",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/pipeline/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/pipeline\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/pipeline'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_PIPELINE"
+    }
+  }
+}
