@@ -410,6 +410,30 @@ main() {
     fi
     log_success "Files copied to $DEPLOY_PATH"
     
+    # Step 4b: Generate .htaccess for SPA routing + cache headers
+    local APP_SUBPATH="/$(basename "$DEPLOY_PATH")/"
+    cat > "$DEPLOY_PATH/.htaccess" <<HTEOF
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase ${APP_SUBPATH}
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . ${APP_SUBPATH}index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "^index\\.html\$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+    <FilesMatch "\\.(js|css|woff2)\$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+HTEOF
+    log "Generated .htaccess: RewriteBase ${APP_SUBPATH}"
+    
     # Step 5: Run postDeploy commands
     log "Step 5: Running postDeploy commands..."
     run_post_deploy
