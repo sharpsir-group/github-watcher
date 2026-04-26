@@ -143,6 +143,78 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_PIPELINE"
+    },
+    "sharpsir-group/matrix-analytics": {
+      "name": "Analytics",
+      "localPath": "/home/bitnami/matrix-analytics",
+      "deployPath": "/opt/bitnami/apache/htdocs/analytics",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/analytics/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/analytics\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/analytics'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_ANALYTICS"
+    },
+    "sharpsir-group/matrix-atlas-mls": {
+      "name": "Matrix Atlas MLS",
+      "localPath": "/home/bitnami/matrix-atlas-mls",
+      "deployPath": "/opt/bitnami/apache/htdocs/mls",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/mls/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/mls\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/mls'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_ATLAS"
     }
   }
 }
