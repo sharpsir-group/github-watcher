@@ -144,12 +144,36 @@ function runDeploy(repoKey, callback) {
     });
 }
 
+/**
+ * When Apache proxies https://host/webhook/github-watcher/* to this process,
+ * req.url may still include the /webhook/github-watcher prefix. Normalize so
+ * health checks and routing match the same paths as a direct :9001 hit.
+ */
+function getRequestPath(rawUrl) {
+    let pathname = (rawUrl || '/').split('?')[0] || '/';
+    // Apache mod_proxy sometimes forwards the proxied URI as "//" (trailing slash on mount).
+    pathname = pathname.replace(/\/{2,}/g, '/');
+    const prefix = '/webhook/github-watcher';
+    if (!pathname.startsWith(prefix)) {
+        return pathname;
+    }
+    let rest = pathname.slice(prefix.length);
+    if (rest === '' || rest === '/') {
+        return '/';
+    }
+    if (!rest.startsWith('/')) {
+        rest = '/' + rest;
+    }
+    return rest;
+}
+
 // Create HTTP server
 const server = http.createServer((req, res) => {
     const timestamp = new Date().toISOString();
+    const reqPath = getRequestPath(req.url);
     
     // Health check endpoint
-    if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
+    if (req.method === 'GET' && (reqPath === '/' || reqPath === '/health')) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ 
             status: 'ok', 

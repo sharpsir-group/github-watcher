@@ -396,6 +396,7 @@ main() {
     
     # Step 4: Deploy
     log "Step 4: Copying files to deploy path..."
+    mkdir -p "$DEPLOY_PATH"
     rm -rf "$DEPLOY_PATH"/*
     cp -r "$LOCAL_PATH/$DIST_FOLDER"/* "$DEPLOY_PATH/"
     

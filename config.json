@@ -108,9 +108,9 @@
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_HRMS"
     },
-    "sharpsir-group/smpipeline": {
+    "sharpsir-group/matrix-pipeline-2-0": {
       "name": "Pipeline",
-      "localPath": "/home/bitnami/matrix-pipeline",
+      "localPath": "/home/bitnami/matrix-pipeline-2-0",
       "deployPath": "/opt/bitnami/apache/htdocs/pipeline",
       "branch": "main",
       "preBuild": [
@@ -129,12 +129,6 @@
           "file": "src/App.tsx",
           "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
           "replace": "<BrowserRouter basename=\"/pipeline\">",
-          "regex": true
-        },
-        {
-          "file": "src/lib/matrix-sso.ts",
-          "find": "const BASE_PATH = '[^']*'",
-          "replace": "const BASE_PATH = '/pipeline'",
           "regex": true
         }
       ],
@@ -215,6 +209,78 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_ATLAS"
+    },
+    "sharpsir-group/matrix-apps-template-2-1": {
+      "name": "Matrix Apps Template 2.1",
+      "localPath": "/home/bitnami/matrix-apps-template-2-1",
+      "deployPath": "/opt/bitnami/apache/htdocs/apps-template-2-1",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/apps-template-2-1/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/apps-template-2-1\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/apps-template-2-1'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_APPS_TEMPLATE_21"
+    },
+    "sharpsir-group/matrix-stardom": {
+      "name": "Matrix Stardom",
+      "localPath": "/home/bitnami/matrix-stardom",
+      "deployPath": "/opt/bitnami/apache/htdocs/stardom",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/stardom/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/stardom\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/stardom'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_STARDOM"
     }
   }
 }
