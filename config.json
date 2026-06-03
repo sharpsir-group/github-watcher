@@ -271,8 +271,8 @@
         },
         {
           "file": "src/lib/matrix-sso.ts",
-          "find": "const BASE_PATH = '[^']*'",
-          "replace": "const BASE_PATH = '/stardom'",
+          "find": "const BASE_PATH = ['\"][^'\"]*['\"];",
+          "replace": "const BASE_PATH = '/stardom';",
           "regex": true
         }
       ],
