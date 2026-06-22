@@ -281,6 +281,36 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_STARDOM"
+    },
+    "sharpsir-group/matrix-cdl-studio": {
+      "name": "Data Model Studio",
+      "localPath": "/home/bitnami/matrix-cdl-studio",
+      "deployPath": "/opt/bitnami/apache/htdocs/cdl-studio",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/cdl-studio/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/cdl-studio\">",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_CDL_STUDIO"
     }
   }
 }
