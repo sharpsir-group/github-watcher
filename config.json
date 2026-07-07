@@ -1,4 +1,5 @@
 {
+  "maxConcurrentDeploys": 1,
   "repos": {
     "sharpsir-group/itsm-2-1": {
       "name": "ITSM",
@@ -311,6 +312,42 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_CDL_STUDIO"
+    },
+    "sharpsir-group/matrix-qobrix-sales-automation-rls": {
+      "name": "Qobrix Sales Automation RLS",
+      "localPath": "/home/bitnami/matrix-qobrix-sales-automation-rls",
+      "deployPath": "/opt/bitnami/apache/htdocs/qobrix-rls",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*[^\n,]+,?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/qobrix-rls/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/qobrix-rls\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/qobrix-rls'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_QOBRIX_RLS"
     }
   }
 }

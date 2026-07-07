@@ -1,4 +1,5 @@
 {
+  "maxConcurrentDeploys": 1,
   "repos": {
     "your-org/your-app": {
       "name": "My App",

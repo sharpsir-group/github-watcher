@@ -63,42 +63,80 @@ function verifySignature(payload, signature, secret) {
     }
 }
 
-// Deploy queue: prevents concurrent deploys for the same repo
-const deployState = {};
+// Global deploy queue: serializes builds across all repos (configurable concurrency)
+let maxConcurrentDeploys = 1;
+const queue = [];
+const queued = new Set();
+const running = new Set();
+let activeDeploys = 0;
 
-function getRepoState(repoKey) {
-    if (!deployState[repoKey]) {
-        deployState[repoKey] = { running: false, pending: false };
+function getMaxConcurrentDeploys(config) {
+    const n = config?.maxConcurrentDeploys;
+    if (typeof n === 'number' && n >= 1 && Number.isFinite(n)) {
+        return Math.floor(n);
     }
-    return deployState[repoKey];
+    return 1;
 }
 
-function queueDeploy(repoKey) {
-    const state = getRepoState(repoKey);
+function queueDepth() {
+    return queue.length + activeDeploys;
+}
 
-    if (state.running) {
-        state.pending = true;
-        console.log(`[${new Date().toISOString()}] Deploy already running for ${repoKey}, queued next run`);
-        return;
+function enqueueDeploy(repoKey) {
+    const config = loadConfig();
+    maxConcurrentDeploys = getMaxConcurrentDeploys(config);
+
+    if (running.has(repoKey) || queued.has(repoKey)) {
+        console.log(`[${new Date().toISOString()}] Deploy coalesced for ${repoKey} (already running or queued)`);
+        return { status: 'coalesced', depth: queueDepth() };
     }
 
-    state.running = true;
-    state.pending = false;
+    const position = queueDepth() + 1;
+    const willStartNow = activeDeploys < maxConcurrentDeploys;
 
-    runDeploy(repoKey, (code, output, error) => {
-        if (code === 0) {
-            console.log(`[${new Date().toISOString()}] Deployment successful for ${repoKey}`);
-        } else {
-            console.error(`[${new Date().toISOString()}] Deployment failed for ${repoKey}`);
-        }
+    queue.push(repoKey);
+    queued.add(repoKey);
+    console.log(
+        `[${new Date().toISOString()}] Deploy queued for ${repoKey} ` +
+        `(position ${position}, depth ${queueDepth()})`
+    );
 
-        state.running = false;
+    pump();
 
-        if (state.pending) {
-            console.log(`[${new Date().toISOString()}] Running queued deploy for ${repoKey}`);
-            queueDeploy(repoKey);
-        }
-    });
+    if (willStartNow && running.has(repoKey)) {
+        return { status: 'started', depth: queueDepth() };
+    }
+    return { status: 'queued', position, depth: queueDepth() };
+}
+
+function pump() {
+    const config = loadConfig();
+    maxConcurrentDeploys = getMaxConcurrentDeploys(config);
+
+    while (activeDeploys < maxConcurrentDeploys && queue.length > 0) {
+        const repoKey = queue.shift();
+        queued.delete(repoKey);
+        running.add(repoKey);
+        activeDeploys++;
+
+        runDeploy(repoKey, (code) => {
+            running.delete(repoKey);
+            activeDeploys--;
+
+            if (code === 0) {
+                console.log(`[${new Date().toISOString()}] Deployment successful for ${repoKey}`);
+            } else {
+                console.error(`[${new Date().toISOString()}] Deployment failed for ${repoKey}`);
+            }
+
+            const remaining = queue.length;
+            if (remaining > 0) {
+                console.log(`[${new Date().toISOString()}] ${remaining} deploy(s) remaining in queue`);
+            }
+
+            pump();
+        });
+    }
 }
 
 // Run deployment script
@@ -279,14 +317,19 @@ const server = http.createServer((req, res) => {
         }
         
         // Respond immediately to GitHub
+        const enqueueResult = enqueueDeploy(repoFullName);
+        const statusMessage = enqueueResult.status === 'coalesced'
+            ? `Deployment coalesced for ${repoConfig.name} (already running or queued)`
+            : enqueueResult.status === 'started'
+                ? `Deployment started for ${repoConfig.name}`
+                : `Deployment queued for ${repoConfig.name} (position ${enqueueResult.position})`;
+
         res.writeHead(202, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-            status: 'accepted', 
-            message: `Deployment started for ${repoConfig.name}` 
+        res.end(JSON.stringify({
+            status: 'accepted',
+            message: statusMessage,
+            queue: { status: enqueueResult.status, depth: enqueueResult.depth }
         }));
-        
-        // Queue deployment (prevents concurrent deploys for same repo)
-        queueDeploy(repoFullName);
     });
     
     req.on('error', (err) => {
