@@ -348,6 +348,58 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_QOBRIX_RLS"
+    },
+    "sharpsir-group/matrix-qobrix-sales-automation-v1-0@main": {
+      "name": "MSA staging main",
+      "localPath": "/home/bitnami/matrix-sa-staging-main",
+      "deployPath": "/opt/bitnami/apache/htdocs/msa-staging-main",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*[^\n,]+,?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/msa-staging-main/\","
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [
+        "bash /home/bitnami/matrix-sa-staging-main/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
+      ],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_QOBRIX_V10"
+    },
+    "sharpsir-group/matrix-qobrix-sales-automation-v1-0@cdto": {
+      "name": "MSA staging cdto",
+      "localPath": "/home/bitnami/matrix-sa-staging-cdto",
+      "deployPath": "/opt/bitnami/apache/htdocs/msa-staging-cdto",
+      "branch": "cdto",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*[^\n,]+,?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/msa-staging-cdto/\","
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [
+        "bash /home/bitnami/matrix-sa-staging-cdto/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
+      ],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_QOBRIX_V10"
     }
   }
 }

@@ -200,7 +200,7 @@ gh api repos/your-org/your-repo/hooks --method POST \
 | `name` | string | Display name used in logs |
 | `localPath` | string | Absolute path to the cloned repository |
 | `deployPath` | string | Where built files are copied to |
-| `branch` | string | Only deploy pushes to this branch |
+| `branch` | string | Branch this target builds (must match the push; see `@branch` keys below) |
 | `preBuild` | array | Find/replace patches applied before build (auto-reverted) |
 | `buildCmd` | string | Shell command to build the project |
 | `distFolder` | string | Build output directory (relative to repo root) |
@@ -208,6 +208,21 @@ gh api repos/your-org/your-repo/hooks --method POST \
 | `cloudfront` | object | Optional CloudFront CDN invalidation config |
 | `cloudflare` | object | Optional Cloudflare cache purge config |
 | `secret` | string | Key name in `.env` for webhook signature verification |
+
+#### Multi-branch targets (`org/repo@branch`)
+
+One GitHub repository can drive multiple equal deploys. Prefer keys of the form
+`org/repo@branch` (one entry per branch), each with its own `localPath`,
+`deployPath`, and `preBuild` base path:
+
+```json
+"acme/app@main":  { "branch": "main",  "localPath": "…/app-main",  "deployPath": "…/htdocs/app-main",  … },
+"acme/app@cdto":  { "branch": "cdto",  "localPath": "…/app-cdto",  "deployPath": "…/htdocs/app-cdto",  … }
+```
+
+Webhook lookup: `org/repo@<pushed-branch>` first, then legacy `org/repo` (single
+entry with a `.branch` filter). Unmatched branches on a multi-target repo are
+ignored; unknown repos still 404.
 
 #### Pre-Build Patches
 

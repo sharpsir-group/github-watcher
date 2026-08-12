@@ -78,6 +78,42 @@ function getMaxConcurrentDeploys(config) {
     return 1;
 }
 
+/**
+ * Resolve a push to a config entry.
+ *
+ * Preferred (multi-branch, equal targets):
+ *   config.repos["org/repo@main"], config.repos["org/repo@cdto"], …
+ *
+ * Legacy (single-branch):
+ *   config.repos["org/repo"] with a matching `.branch` field
+ *
+ * Returns { key, config } | { ignored, configuredBranch } | null
+ */
+function resolveRepoConfig(config, repoFullName, branch) {
+    const branchKey = `${repoFullName}@${branch}`;
+    if (config.repos[branchKey]) {
+        return { key: branchKey, config: config.repos[branchKey] };
+    }
+
+    const legacy = config.repos[repoFullName];
+    if (legacy) {
+        if (legacy.branch && branch !== legacy.branch) {
+            return { ignored: true, configuredBranch: legacy.branch };
+        }
+        return { key: repoFullName, config: legacy };
+    }
+
+    // Same repo has @branch targets, but not this branch → ignore (not 404).
+    const prefix = `${repoFullName}@`;
+    const siblings = Object.keys(config.repos).filter((k) => k.startsWith(prefix));
+    if (siblings.length > 0) {
+        const configured = siblings.map((k) => k.slice(prefix.length)).join(', ');
+        return { ignored: true, configuredBranch: configured };
+    }
+
+    return null;
+}
+
 function queueDepth() {
     return queue.length + activeDeploys;
 }
@@ -275,30 +311,32 @@ const server = http.createServer((req, res) => {
             return;
         }
         
-        console.log(`[${timestamp}] Repository: ${repoFullName}`);
-        
-        // Find repo config
-        const repoConfig = config.repos[repoFullName];
-        if (!repoConfig) {
+        const ref = payload.ref || '';
+        const branch = ref.replace('refs/heads/', '');
+        console.log(`[${timestamp}] Repository: ${repoFullName} branch: ${branch || '(none)'}`);
+
+        const resolved = resolveRepoConfig(config, repoFullName, branch);
+        if (!resolved) {
             console.log(`[${timestamp}] Repository not configured: ${repoFullName}`);
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Repository not configured' }));
             return;
         }
-        
-        // Check branch
-        const ref = payload.ref || '';
-        const branch = ref.replace('refs/heads/', '');
-        if (repoConfig.branch && branch !== repoConfig.branch) {
-            console.log(`[${timestamp}] Ignoring push to branch: ${branch} (configured: ${repoConfig.branch})`);
+        if (resolved.ignored) {
+            console.log(
+                `[${timestamp}] Ignoring push to branch: ${branch} ` +
+                `(configured: ${resolved.configuredBranch})`
+            );
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
-                status: 'ignored', 
-                reason: `Push to ${branch}, not ${repoConfig.branch}` 
+            res.end(JSON.stringify({
+                status: 'ignored',
+                reason: `Push to ${branch}, not ${resolved.configuredBranch}`
             }));
             return;
         }
-        
+
+        const { key: repoKey, config: repoConfig } = resolved;
+
         // Verify signature
         const signature = req.headers['x-hub-signature-256'];
         const secretKey = repoConfig.secret;
@@ -306,18 +344,18 @@ const server = http.createServer((req, res) => {
         
         if (secretValue) {
             if (!verifySignature(body, signature, secretValue)) {
-                console.error(`[${timestamp}] Invalid signature for ${repoFullName}`);
+                console.error(`[${timestamp}] Invalid signature for ${repoKey}`);
                 res.writeHead(401, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Invalid signature' }));
                 return;
             }
             console.log(`[${timestamp}] Signature verified`);
         } else {
-            console.log(`[${timestamp}] Warning: No secret configured for ${repoFullName}`);
+            console.log(`[${timestamp}] Warning: No secret configured for ${repoKey}`);
         }
         
         // Respond immediately to GitHub
-        const enqueueResult = enqueueDeploy(repoFullName);
+        const enqueueResult = enqueueDeploy(repoKey);
         const statusMessage = enqueueResult.status === 'coalesced'
             ? `Deployment coalesced for ${repoConfig.name} (already running or queued)`
             : enqueueResult.status === 'started'
@@ -328,6 +366,7 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({
             status: 'accepted',
             message: statusMessage,
+            target: repoKey,
             queue: { status: enqueueResult.status, depth: enqueueResult.depth }
         }));
     });
@@ -353,7 +392,8 @@ server.listen(PORT, '0.0.0.0', () => {
         const config = loadConfig();
         console.log('Configured repositories:');
         Object.keys(config.repos).forEach(repo => {
-            console.log(`  - ${repo} (${config.repos[repo].name})`);
+            const entry = config.repos[repo];
+            console.log(`  - ${repo} → ${entry.name} [${entry.branch || '?'}] ${entry.deployPath || ''}`);
         });
     } catch (e) {
         console.error('Warning: Could not load config:', e.message);
