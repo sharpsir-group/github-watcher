@@ -1,5 +1,6 @@
 {
   "maxConcurrentDeploys": 1,
+  "reconcileIntervalMs": 300000,
   "repos": {
     "your-org/your-app": {
       "name": "My App",

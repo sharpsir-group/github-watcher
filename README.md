@@ -62,7 +62,9 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 - **Cloudflare cache purge** — optional edge + Worker Cache API purge via Cloudflare API
 - **Deploy queue** — concurrent pushes to the same repo are queued, not dropped
 - **Deploy stamping** — injects commit hash + timestamp into `index.html` for traceability
+- **Webhook reconciliation** — polls remote tips vs deploy stamps every 5 minutes so a dropped or delayed GitHub delivery cannot leave an app stale
 - **Health check** — `GET /health` endpoint for uptime monitoring
+- **Sync status** — `GET /status` reports per-target deployed vs remote sha
 - **PM2 ready** — ships with an `ecosystem.config.js` for production process management
 
 ### Architecture
@@ -114,6 +116,8 @@ Edit `config.json` with your repositories:
 
 ```json
 {
+  "maxConcurrentDeploys": 1,
+  "reconcileIntervalMs": 300000,
   "repos": {
     "your-org/your-repo": {
       "name": "My App",
@@ -192,6 +196,15 @@ gh api repos/your-org/your-repo/hooks --method POST \
 ```
 
 ### Configuration Reference
+
+#### Top-level Config (`config.json`)
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `maxConcurrentDeploys` | number | `1` | How many `deploy.sh` processes may run at once |
+| `reconcileIntervalMs` | number | `300000` | How often to compare live deploy stamps to remote tips (ms). Set `0` or `reconcileEnabled: false` to disable |
+| `reconcileEnabled` | boolean | `true` | Set `false` to turn off the reconciler without changing the interval |
+| `repos` | object | — | Map of `org/repo` or `org/repo@branch` → target config |
 
 #### Repository Config (`config.json`)
 
@@ -333,7 +346,27 @@ Repos without a `cloudflare` block are unaffected — the purge step is silently
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/` or `/health` | Health check — returns `{"status":"ok"}` |
+| `GET` | `/status` | Per-target sync report: deployed stamp vs remote tip, queue depth, `allInSync` |
+| `POST` | `/reconcile` | Force an immediate reconcile sweep (**loopback only**) |
 | `POST` | `/` | Webhook receiver — accepts GitHub push events |
+
+```bash
+# Are all apps in sync?
+curl -s http://127.0.0.1:9001/status | jq '{allInSync, queueDepth, targets: [.targets[] | {key, deployed, remote, inSync}]}'
+
+# Force a catch-up sweep (localhost only)
+curl -s -X POST http://127.0.0.1:9001/reconcile
+```
+
+### Webhook reconciliation
+
+GitHub webhooks can be delayed or dropped during platform outages. The reconciler closes that gap:
+
+1. Every `reconcileIntervalMs` (default 5 minutes), compare each target's `<!-- deploy: … sha -->` stamp in `<deployPath>/index.html` to `git ls-remote origin <branch>`.
+2. On mismatch, enqueue a deploy through the same queue used by webhooks (coalescing + `maxConcurrentDeploys` still apply — no stampede).
+3. Failed deploys back off exponentially (skip 1, 2, 4… ticks, capped around 1 hour) so a broken build is not rebuilt every five minutes forever. Success clears the counter.
+
+If a push does not deploy, check [githubstatus.com](https://www.githubstatus.com/) first. You do **not** need a synthetic webhook POST — the reconciler will pick up the drift within one interval (or immediately via `POST /reconcile` from the server).
 
 ### Deployment Pipeline
 
