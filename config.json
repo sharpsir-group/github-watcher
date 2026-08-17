@@ -1,9 +1,9 @@
 {
   "maxConcurrentDeploys": 1,
   "repos": {
-    "sharpsir-group/itsm-2-1": {
+    "gca-global/matrix-itsm": {
       "name": "ITSM",
-      "localPath": "/home/bitnami/itsm-2-1",
+      "localPath": "/home/bitnami/matrix-itsm",
       "deployPath": "/opt/bitnami/apache/htdocs/itsm",
       "branch": "main",
       "preBuild": [
@@ -400,6 +400,32 @@
       ],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_QOBRIX_V10"
+    },
+    "gca-global/matrix-sales-automation-hungary": {
+      "name": "MSA Hungary staging main",
+      "localPath": "/home/bitnami/matrix-sa-hungary-staging-main",
+      "deployPath": "/opt/bitnami/apache/htdocs/msa-hungary-staging-main",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*[^\n,]+,?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/msa-hungary-staging-main/\","
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [
+        "bash /home/bitnami/matrix-sa-hungary-staging-main/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
+      ],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_MSA_HUNGARY"
     }
   }
 }
