@@ -157,8 +157,10 @@ AWS and Cloudflare credentials go in the same file (see Configuration Reference 
 
 ```bash
 git clone git@github.com:your-org/your-repo.git /home/deploy/your-repo
-mkdir -p /var/www/my-app
 ```
+
+The clone at `localPath` is required — `deploy.sh` only ever `fetch`es an existing checkout,
+it never clones for you. The `deployPath` does **not** need to exist; `deploy.sh` creates it.
 
 #### 5. Start
 
@@ -194,6 +196,44 @@ gh api repos/your-org/your-repo/hooks --method POST \
   -f 'events[]=push' \
   -F 'active=true'
 ```
+
+### Onboarding a new app — checklist
+
+Everything below is required. Steps 1–2 alone give you a target that **silently never deploys**.
+
+| # | Step | Notes |
+|---|---|---|
+| 1 | **Clone** the repo to `localPath` | `deploy.sh` never clones; it `fetch`es an existing checkout |
+| 2 | **Add the `config.json` entry** | Key `org/repo` (or `org/repo@branch`). See the field table below and the base-path patch trio |
+| 3 | **Add `WEBHOOK_SECRET_<APP>` to `.env`** | `openssl rand -hex 32`; must match the `secret` field. Without it pushes deploy **unverified** |
+| 4 | **Create the GitHub webhook** | Push events, `application/json`, same secret, URL `https://<host>/webhook/github-watcher` |
+| 5 | **Trigger the first deploy with a real push** | The reconciler **cannot** bootstrap a new target — it skips any deploy path with no `<!-- deploy: … -->` stamp, which is every never-deployed app |
+| 6 | **Register the app's SSO redirect URI** (Matrix apps) | `https://<host>/<subpath>/auth/callback`, or OAuth fails after login |
+| 7 | **Verify** | `curl -s localhost:9001/status`, then the newest `logs/<org>_<repo>_*.log` for `Deployment completed successfully` |
+
+You do **not** need to create the `deployPath`, write an `.htaccess`, or restart the process —
+see below.
+
+#### No restart needed to add a repo or secret
+
+`config.json` and `.env` are re-read **per webhook request** (and again when the queue pumps a
+deploy), so a new target, a rotated secret, or a changed `maxConcurrentDeploys` takes effect
+immediately. Only the **reconciler settings** (`reconcileIntervalMs` / `reconcileEnabled`) are
+read once at boot, so changing those needs `pm2 restart github-watcher --update-env`.
+
+#### Base-path patch trio (subpath SPAs)
+
+A subpath deploy needs all three patches, and all three must agree with
+`basename(deployPath)` — see [SPA `.htaccess`](#spa-htaccess) for the failure mode:
+
+| Patch target | Purpose |
+|---|---|
+| `vite.config.ts` `base` | asset URLs |
+| `src/App.tsx` `<BrowserRouter basename>` | client-side routing |
+| `src/lib/matrix-sso.ts` `BASE_PATH` | OAuth `redirect_uri` |
+
+Most Matrix entries strip any committed `base:` with a regex patch first, then insert their own,
+so the repo can stay root-mounted for Lovable preview.
 
 ### Configuration Reference
 
@@ -375,12 +415,13 @@ When a valid push event is received, the deploy script runs these steps in order
 1. **Git pull** — `fetch` + `reset --hard` to the configured branch
 2. **Pre-build patches** — apply configured find/replace transformations
 3. **Build** — run the configured build command
-4. **Deploy** — copy build output to the deploy path
+4. **Deploy** — `mkdir -p` the deploy path, wipe it, copy build output in
 5. **Stamp** — inject deploy timestamp and commit hash into `index.html`
-6. **Post-deploy hooks** — run any configured post-deploy commands
-7. **Revert patches** — restore patched files to their original state
-8. **CloudFront invalidation** — create CloudFront invalidation if configured
-9. **Cloudflare cache purge** — purge Cloudflare edge + Worker Cache API if configured
+6. **Generate `.htaccess`** — SPA rewrite + cache headers, derived from the deploy path (see [SPA `.htaccess`](#spa-htaccess))
+7. **Post-deploy hooks** — run any configured post-deploy commands (still patched at this point)
+8. **Revert patches** — restore patched files to their original state
+9. **CloudFront invalidation** — create CloudFront invalidation if configured
+10. **Cloudflare cache purge** — purge Cloudflare edge + Worker Cache API if configured
 
 If the build fails at any step, patches are reverted and the deploy is aborted.
 
@@ -399,7 +440,20 @@ GitHub webhook Payload URL: `https://your-domain/webhook/github-watcher`
 
 #### SPA `.htaccess`
 
-Each deploy path serving a single-page app needs an `.htaccess` for client-side routing:
+**`deploy.sh` writes this file for you on every deploy — do not hand-maintain it.** Any
+manual edits are overwritten by the next deploy. The rewrite base is derived from the
+**last path segment of `deployPath`**:
+
+```
+deployPath: /opt/bitnami/apache/htdocs/my-app   →   RewriteBase /my-app/
+```
+
+> **Invariant:** `basename(deployPath)` MUST equal the URL subpath used in the `base:`
+> pre-build patch (and the router `basename` / SSO `BASE_PATH`). If `deployPath` ends in
+> `my-app` but the build sets `base: "/app/"`, Apache rewrites under `/my-app/` while the
+> bundle requests assets from `/app/` — the app loads a blank page with 404s on `/app/assets/*`.
+
+The generated file is equivalent to:
 
 ```apache
 <IfModule mod_rewrite.c>
@@ -420,7 +474,10 @@ Each deploy path serving a single-page app needs an `.htaccess` for client-side 
 </IfModule>
 ```
 
-> **Note:** `deploy.sh` runs `rm -rf "$DEPLOY_PATH"/*` before copying, but the `*` glob does not match dotfiles, so `.htaccess` survives redeploys.
+> **Note:** `deploy.sh` runs `rm -rf "$DEPLOY_PATH"/*` before copying. The `*` glob does not
+> match dotfiles, so unrelated dotfiles in the deploy path survive — but `.htaccess` itself is
+> regenerated from scratch each time. Anything you need to persist there must be applied by a
+> `postDeploy` hook (see the `patch-share-og-htaccess.sh` targets in `config.json`).
 
 ### Running with PM2
 
@@ -448,7 +505,7 @@ Trigger a deploy without a webhook:
 github-watcher/
 ├── webhook-server.js      # HTTP server — receives and validates webhooks
 ├── deploy.sh              # Build and deploy pipeline
-├── config.json            # Repository configurations (git-ignored)
+├── config.json            # Repository configurations (in .gitignore for fresh installs)
 ├── config.example.json    # Example configuration
 ├── ecosystem.config.js    # PM2 process manager config
 ├── package.json           # npm metadata and keywords
@@ -462,7 +519,13 @@ github-watcher/
 
 - Webhook signatures are verified using HMAC-SHA256 (`X-Hub-Signature-256`)
 - All secrets and credentials live in a single `.env` file with `600` permissions
-- Sensitive files (`.env`, `config.json`, `logs/`) are git-ignored
+- `.env` and `logs/` are git-ignored. `config.json` is listed in `.gitignore` too, but on an
+  instance where it was committed before that rule existed it stays tracked (git ignores only
+  untracked files) — check `git ls-files config.json` before assuming your edit is private.
+  It holds no secret **values**, only the `secret` env-var *names* to look up in `.env`
+- **A missing secret does not block a deploy.** If `config.json` names a `secret` key that is
+  absent from `.env`, the server logs `Warning: No secret configured` and deploys the push
+  **without verifying the signature**. Always add the `.env` value when adding a target
 - Request body size is capped at 10 MB
 - The server binds to `0.0.0.0` — use a firewall or reverse proxy to restrict access
 

@@ -427,6 +427,42 @@
       ],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_MSA_HUNGARY"
+    },
+    "gca-global/matrix-digital-employees": {
+      "name": "Digital Employees",
+      "localPath": "/home/bitnami/matrix-digital-employees",
+      "deployPath": "/opt/bitnami/apache/htdocs/digital-employees",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/digital-employees/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/digital-employees\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/digital-employees'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "npm install --include=dev && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_DIGITAL_EMPLOYEES"
     }
   }
 }
