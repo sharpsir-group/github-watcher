@@ -2,7 +2,7 @@
   "maxConcurrentDeploys": 1,
   "reconcileIntervalMs": 300000,
   "repos": {
-    "gca-global/matrix-itsm": {
+    "gca-ltd/matrix-itsm": {
       "name": "ITSM",
       "localPath": "/home/bitnami/matrix-itsm",
       "deployPath": "/opt/bitnami/apache/htdocs/itsm",
@@ -402,7 +402,7 @@
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_QOBRIX_V10"
     },
-    "gca-global/matrix-sales-automation-hungary": {
+    "gca-ltd/matrix-sales-automation-hungary": {
       "name": "MSA Hungary staging main",
       "localPath": "/home/bitnami/matrix-sa-hungary-staging-main",
       "deployPath": "/opt/bitnami/apache/htdocs/msa-hungary-staging-main",
@@ -428,7 +428,7 @@
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_MSA_HUNGARY"
     },
-    "gca-global/matrix-digital-employees": {
+    "gca-ltd/matrix-digital-employees": {
       "name": "Digital Employees",
       "localPath": "/home/bitnami/matrix-digital-employees",
       "deployPath": "/opt/bitnami/apache/htdocs/digital-employees",
