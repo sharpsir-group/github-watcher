@@ -209,7 +209,7 @@ Everything below is required. Steps 1–2 alone give you a target that **silentl
 | 4 | **Create the GitHub webhook** | Push events, `application/json`, same secret, URL `https://<host>/webhook/github-watcher` |
 | 5 | **Trigger the first deploy with a real push** | The reconciler **cannot** bootstrap a new target — it skips any deploy path with no `<!-- deploy: … -->` stamp, which is every never-deployed app |
 | 6 | **Register the app's SSO redirect URI** (Matrix apps) | `https://<host>/<subpath>/auth/callback`, or OAuth fails after login |
-| 7 | **Verify** | `curl -s localhost:9001/status`, then the newest `logs/<org>_<repo>_*.log` for `Deployment completed successfully` |
+| 7 | **Verify** | `curl -s localhost:9001/status`, then the newest `logs/<org>_<repo>_*.log` for `Deployment completed successfully`. Confirm step 4 separately with `gh api repos/<org>/<repo>/hooks --jq length` — a successful deploy does **not** prove the webhook exists (see below) |
 
 You do **not** need to create the `deployPath`, write an `.htaccess`, or restart the process —
 see below.
@@ -407,6 +407,21 @@ GitHub webhooks can be delayed or dropped during platform outages. The reconcile
 3. Failed deploys back off exponentially (skip 1, 2, 4… ticks, capped around 1 hour) so a broken build is not rebuilt every five minutes forever. Success clears the counter.
 
 If a push does not deploy, check [githubstatus.com](https://www.githubstatus.com/) first. You do **not** need a synthetic webhook POST — the reconciler will pick up the drift within one interval (or immediately via `POST /reconcile` from the server).
+
+**The reconciler masks a missing webhook.** A target with no hook at all still deploys, just up to one interval late, so "the app is deploying" is not evidence that step 4 was ever done — the only symptom is a ~5 minute lag. Audit the hook itself rather than inferring it:
+
+```bash
+# 0 means step 4 was skipped; the app is running on the reconciler alone
+gh api repos/<org>/<repo>/hooks --jq 'length'
+
+# End-to-end check without triggering a deploy: a ping carries no `ref`, so it
+# resolves the target and returns 200 "Ignoring push to branch" — a 404
+# "Repository not configured" instead means the config key does not match
+# repository.full_name (e.g. after a GitHub org or repo rename).
+gh api --method POST repos/<org>/<repo>/hooks/<id>/pings
+```
+
+Note the receiver resolves the target key *before* verifying the signature, so a ping does not exercise the secret; the first real push is what confirms it.
 
 ### Deployment Pipeline
 
