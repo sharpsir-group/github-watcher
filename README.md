@@ -34,7 +34,7 @@
 
 ### Why
 
-We build apps in [Lovable](https://lovable.dev), which syncs every change to a GitHub repo. GitHub Watcher bridges the gap between Lovable's cloud development and our self-hosted infrastructure: every time Lovable pushes to `main`, this server pulls the code, patches it for our subpath deployment (e.g. `/hrms/`, `/pipeline/`), builds it, and copies the output to the web server — all without touching the Lovable project files.
+We build apps in [Lovable](https://lovable.dev), which syncs every change to a GitHub repo. GitHub Watcher bridges the gap between Lovable's cloud development and our self-hosted infrastructure: every time Lovable pushes to `main`, this server pulls the code, patches it for our subpath deployment (e.g. `/hrms/`, `/pipeline/`), builds it, and publishes an immutable release under `/opt/bitnami/apache/releases/<subpath>/<sha>/` with an atomic symlink swap at the web path — all without touching the Lovable project files.
 
 No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a single Node.js process, a JSON config, and a GitHub webhook.
 
@@ -60,11 +60,16 @@ No GitHub Actions YAML, no build minutes to burn, no vendor lock-in. Just a sing
 - **Post-deploy hooks** — run arbitrary commands after deployment (restart services, notify, etc.)
 - **CloudFront invalidation** — optional CDN cache busting via AWS CLI
 - **Cloudflare cache purge** — optional edge + Worker Cache API purge via Cloudflare API
-- **Deploy queue** — concurrent pushes to the same repo are queued, not dropped
+- **Deploy queue** — concurrent pushes to the same repo are queued; a push that arrives mid-deploy is marked dirty and re-runs automatically
+- **Immutable releases + atomic symlink** — build output lands under `/opt/bitnami/apache/releases/<subpath>/<sha>/`; `deployPath` is a symlink swapped with `mv -T` (no empty-site window)
+- **Build timeouts + watchdog** — `deploy.sh` wraps the build in `timeout` (default 900s); the parent kills the whole process group after `deployTimeoutMs` (default 20 min)
+- **Classified failures** — exit `10` (compile) exponential backoff, `20` (timeout/network) fast retry, `30` (fatal env) max backoff
+- **Auto-rollback** — post-publish stamp mismatch repoints the symlink to the previous release
 - **Deploy stamping** — injects commit hash + timestamp into `index.html` for traceability
 - **Webhook reconciliation** — polls remote tips vs deploy stamps every 5 minutes so a dropped or delayed GitHub delivery cannot leave an app stale
 - **Health check** — `GET /health` endpoint for uptime monitoring
-- **Sync status** — `GET /status` reports per-target deployed vs remote sha
+- **Sync status** — `GET /status` reports per-target deployed vs remote sha, symlink target, stuck time
+- **Manual rollback** — loopback `POST /rollback` repoints an app to its previous release
 - **PM2 ready** — ships with an `ecosystem.config.js` for production process management
 
 ### Architecture
@@ -83,18 +88,20 @@ sequenceDiagram
     WH->>WH: verify HMAC-SHA256
     WH->>DS: spawn
 
-    DS->>DS: git pull
+    DS->>DS: fetch + pin TARGET_SHA + clean
     DS->>DS: pre-build patches
-    DS->>DS: build
-    DS->>DS: copy to deploy path
-    DS->>DS: stamp index.html
+    DS->>DS: timeout-wrapped build
+    DS->>DS: write releases/subpath/sha
+    DS->>DS: stamp index.html + .htaccess
+    DS->>DS: atomic symlink swap
+    DS->>DS: verify stamp (rollback on mismatch)
     DS->>DS: post-deploy hooks
     DS->>DS: revert patches
     DS->>CF: invalidation request
     CF-->>DS: invalidation created
     DS->>CFL: purge cache API
     CFL-->>DS: cache purged
-    DS-->>WH: exit 0
+    DS-->>WH: exit 0 / 10 / 20 / 30
 ```
 
 ### Quick Start
@@ -118,6 +125,7 @@ Edit `config.json` with your repositories:
 {
   "maxConcurrentDeploys": 1,
   "reconcileIntervalMs": 300000,
+  "deployTimeoutMs": 1200000,
   "repos": {
     "your-org/your-repo": {
       "name": "My App",
@@ -125,7 +133,8 @@ Edit `config.json` with your repositories:
       "deployPath": "/var/www/my-app",
       "branch": "main",
       "preBuild": [],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
+      "buildTimeoutSec": 900,
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -135,7 +144,7 @@ Edit `config.json` with your repositories:
 }
 ```
 
-> **Note:** Use `npm install --include=dev` instead of `npm ci` in `buildCmd`. PM2 sets `NODE_ENV=production`, which causes `npm install` / `npm ci` to skip devDependencies (including build tools like Vite). The `--include=dev` flag ensures they are always installed.
+> **Note:** Use `npm install --include=dev` instead of `npm ci` in `buildCmd`. PM2 sets `NODE_ENV=production`, which causes `npm install` / `npm ci` to skip devDependencies (including build tools like Vite). Prefer `NODE_OPTIONS='--dns-result-order=ipv4first'` plus `--prefer-offline --no-audit --no-fund` so registry hangs on broken IPv6 paths cannot wedge the single deploy slot.
 
 #### 3. Create `.env`
 
@@ -160,7 +169,10 @@ git clone git@github.com:your-org/your-repo.git /home/deploy/your-repo
 ```
 
 The clone at `localPath` is required — `deploy.sh` only ever `fetch`es an existing checkout,
-it never clones for you. The `deployPath` does **not** need to exist; `deploy.sh` creates it.
+it never clones for you. The `deployPath` does **not** need to exist up front; on first deploy
+`deploy.sh` migrates any existing real directory to
+`/opt/bitnami/apache/releases/<subpath>/legacy-<timestamp>/` and replaces it with a symlink.
+Ensure `/opt/bitnami/apache/releases` exists and is writable by the watcher user.
 
 #### 5. Start
 
@@ -218,8 +230,9 @@ see below.
 
 `config.json` and `.env` are re-read **per webhook request** (and again when the queue pumps a
 deploy), so a new target, a rotated secret, or a changed `maxConcurrentDeploys` takes effect
-immediately. Only the **reconciler settings** (`reconcileIntervalMs` / `reconcileEnabled`) are
-read once at boot, so changing those needs `pm2 restart github-watcher --update-env`.
+immediately. **Boot-time only:** `reconcileIntervalMs` / `reconcileEnabled` / top-level
+`deployTimeoutMs`, and any change to `webhook-server.js` or `deploy.sh` — those need
+`pm2 restart github-watcher`.
 
 #### Base-path patch trio (subpath SPAs)
 
@@ -244,6 +257,7 @@ so the repo can stay root-mounted for Lovable preview.
 | `maxConcurrentDeploys` | number | `1` | How many `deploy.sh` processes may run at once |
 | `reconcileIntervalMs` | number | `300000` | How often to compare live deploy stamps to remote tips (ms). Set `0` or `reconcileEnabled: false` to disable |
 | `reconcileEnabled` | boolean | `true` | Set `false` to turn off the reconciler without changing the interval |
+| `deployTimeoutMs` | number | `1200000` | Parent watchdog: kill the deploy process group after this many ms (default 20 min) |
 | `repos` | object | — | Map of `org/repo` or `org/repo@branch` → target config |
 
 #### Repository Config (`config.json`)
@@ -252,15 +266,42 @@ so the repo can stay root-mounted for Lovable preview.
 |---|---|---|
 | `name` | string | Display name used in logs |
 | `localPath` | string | Absolute path to the cloned repository |
-| `deployPath` | string | Where built files are copied to |
+| `deployPath` | string | Public web path — becomes a **symlink** to the current release under `/opt/bitnami/apache/releases/<basename>/` |
 | `branch` | string | Branch this target builds (must match the push; see `@branch` keys below) |
-| `preBuild` | array | Find/replace patches applied before build (auto-reverted) |
+| `preBuild` | array | Find/replace patches applied before build (auto-reverted via `git checkout`) |
 | `buildCmd` | string | Shell command to build the project |
+| `buildTimeoutSec` | number | Optional per-repo build timeout (default 900). Exit 124 → classified transient |
 | `distFolder` | string | Build output directory (relative to repo root) |
 | `postDeploy` | array | Shell commands to run after deployment |
 | `cloudfront` | object | Optional CloudFront CDN invalidation config |
 | `cloudflare` | object | Optional Cloudflare cache purge config |
 | `secret` | string | Key name in `.env` for webhook signature verification |
+| `deployTimeoutMs` | number | Optional per-repo override of the parent watchdog |
+
+#### Deploy exit codes
+
+`deploy.sh` exits with a classified code so the webhook server can choose the right recovery:
+
+| Code | Meaning | Recovery |
+|---|---|---|
+| `0` | Success | Clear backoff |
+| `10` | Deterministic build failure (compile error, empty dist, stamp mismatch) | Exponential reconcile backoff |
+| `20` | Transient (build timeout, git fetch, npm network) | Fast retry at 30s then 120s, then tick backoff |
+| `30` | Fatal environment (missing clone, lock held, disk full) | Max backoff |
+
+#### Rollback
+
+```bash
+# Previous release for a target (loopback only)
+curl -s -X POST http://127.0.0.1:9001/rollback \
+  -H 'Content-Type: application/json' \
+  -d '{"target":"gca-ltd/matrix-itsm"}'
+
+# Specific release directory name
+curl -s -X POST http://127.0.0.1:9001/rollback \
+  -H 'Content-Type: application/json' \
+  -d '{"target":"gca-ltd/matrix-itsm","to":"a1b2c3d4e5f6"}'
+```
 
 #### Multi-branch targets (`org/repo@branch`)
 

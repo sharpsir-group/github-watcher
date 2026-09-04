@@ -32,7 +32,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -68,7 +68,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -104,7 +104,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -134,7 +134,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -170,7 +170,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -206,7 +206,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -242,7 +242,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -278,7 +278,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -308,7 +308,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -344,7 +344,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
@@ -368,7 +368,7 @@
           "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/msa-staging-main/\","
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [
         "bash /home/bitnami/matrix-sa-staging-main/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
@@ -394,7 +394,7 @@
           "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/msa-staging-cdto/\","
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [
         "bash /home/bitnami/matrix-sa-staging-cdto/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
@@ -420,7 +420,7 @@
           "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/msa-hungary-staging-main/\","
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [
         "bash /home/bitnami/matrix-sa-hungary-staging-main/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
@@ -458,11 +458,12 @@
           "regex": true
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_DIGITAL_EMPLOYEES"
     }
-  }
+  },
+  "deployTimeoutMs": 1200000
 }

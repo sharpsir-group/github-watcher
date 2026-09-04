@@ -1,6 +1,7 @@
 {
   "maxConcurrentDeploys": 1,
   "reconcileIntervalMs": 300000,
+  "deployTimeoutMs": 1200000,
   "repos": {
     "your-org/your-app": {
       "name": "My App",
@@ -24,7 +25,8 @@
           "replace": "const BASE_PATH = '/app'"
         }
       ],
-      "buildCmd": "npm install --include=dev && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
+      "buildTimeoutSec": 900,
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {
