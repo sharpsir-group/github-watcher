@@ -463,6 +463,42 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_DIGITAL_EMPLOYEES"
+    },
+    "gca-ltd/matrix-comms@prod": {
+      "name": "Matrix Comms",
+      "localPath": "/home/bitnami/matrix-comms",
+      "deployPath": "/opt/bitnami/apache/htdocs/comms",
+      "branch": "prod",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/comms/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/comms\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/comms'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_COMMS"
     }
   },
   "deployTimeoutMs": 1200000
