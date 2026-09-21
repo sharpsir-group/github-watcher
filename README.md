@@ -133,7 +133,7 @@ Edit `config.json` with your repositories:
       "deployPath": "/var/www/my-app",
       "branch": "main",
       "preBuild": [],
-      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run build",
       "buildTimeoutSec": 900,
       "distFolder": "dist",
       "postDeploy": [],
@@ -144,7 +144,7 @@ Edit `config.json` with your repositories:
 }
 ```
 
-> **Note:** Use `npm install --include=dev` instead of `npm ci` in `buildCmd`. PM2 sets `NODE_ENV=production`, which causes `npm install` / `npm ci` to skip devDependencies (including build tools like Vite). Prefer `NODE_OPTIONS='--dns-result-order=ipv4first'` plus `--prefer-offline --no-audit --no-fund` so registry hangs on broken IPv6 paths cannot wedge the single deploy slot.
+> **Note:** Use `npm install --include=dev` instead of `npm ci` in `buildCmd`. PM2 sets `NODE_ENV=production`, which causes `npm install` / `npm ci` to skip devDependencies (including build tools like Vite). Prefer `NODE_OPTIONS='--dns-result-order=ipv4first'` plus `--prefer-online --no-audit --no-fund` so registry hangs on broken IPv6 paths cannot wedge the single deploy slot, while a dependency published after the host's npm cache was last filled revalidates instead of hard-failing with `ETARGET` (Digital Employees, 2026-09-21). `deploy.sh` also retries once with `--prefer-online` if a leftover `--prefer-offline` command hits `ETARGET`/`notarget`, and classifies a remaining notarget as transient so reconcile retries instead of long build backoff.
 
 #### 3. Create `.env`
 

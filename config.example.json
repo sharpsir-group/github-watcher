@@ -25,7 +25,7 @@
           "replace": "const BASE_PATH = '/app'"
         }
       ],
-      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-offline --no-audit --no-fund && npm run build",
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run build",
       "buildTimeoutSec": 900,
       "distFolder": "dist",
       "postDeploy": [],

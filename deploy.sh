@@ -166,6 +166,19 @@ is_transient_output() {
         'ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENETUNREACH|ENOTFOUND|socket hang up|network|fetch failed|getaddrinfo|registry\.npmjs|npm ERR! network|temporary failure|Connection timed out|Could not resolve host|TLS handshake timeout'
 }
 
+# Stale npm packument served under --prefer-offline (Digital Employees, 2026-09-21).
+# The package exists on the registry; the host cache does not know it yet.
+is_npm_notarget_output() {
+    local text="$1"
+    echo "$text" | grep -Eiq \
+        'npm error code ETARGET|npm ERR! code ETARGET|No matching version found for|notarget No matching version'
+}
+
+prefer_online_cmd() {
+    # Rewrite install preference so a one-shot retry revalidates packuments.
+    echo "$1" | sed 's/--prefer-offline/--prefer-online/g'
+}
+
 classify_build_failure() {
     local build_exit="$1"
     local build_log="$2"
@@ -754,10 +767,31 @@ main() {
     BUILD_EXIT=$?
     set -e
 
+    # One-shot: --prefer-offline + stale packument → ETARGET even when the
+    # version exists on the registry. Retry once with --prefer-online.
+    if [ "$BUILD_EXIT" -ne 0 ] \
+        && [[ "$BUILD_CMD" == *--prefer-offline* ]] \
+        && is_npm_notarget_output "$(cat "$BUILD_LOG")"; then
+        local RETRY_CMD
+        RETRY_CMD=$(prefer_online_cmd "$BUILD_CMD")
+        log_warning "npm ETARGET/notarget under --prefer-offline; retrying once with --prefer-online"
+        : > "$BUILD_LOG"
+        set +e
+        timeout -k 30s "${BUILD_TIMEOUT_SEC}s" bash -c "$RETRY_CMD" > >(tee -a "$BUILD_LOG") 2>&1
+        BUILD_EXIT=$?
+        set -e
+    fi
+
     if [ "$BUILD_EXIT" -ne 0 ]; then
         sweep_orphans
         local class
         class=$(classify_build_failure "$BUILD_EXIT" "$(cat "$BUILD_LOG")")
+        # Treat remaining ETARGET as transient once: registry/cache race can
+        # clear on the next reconcile without waiting for a code change.
+        if [ "$class" = "$EXIT_BUILD" ] && is_npm_notarget_output "$(cat "$BUILD_LOG")"; then
+            class="$EXIT_TRANSIENT"
+            log_warning "Classifying npm ETARGET/notarget as transient (exit $EXIT_TRANSIENT)"
+        fi
         rm -f "$BUILD_LOG"
         if [ "$BUILD_EXIT" -eq 124 ]; then
             die "$class" "Build timed out after ${BUILD_TIMEOUT_SEC}s"
