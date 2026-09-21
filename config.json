@@ -458,7 +458,7 @@
           "regex": true
         }
       ],
-      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run build",
+      "buildCmd": "node scripts/check-lockfile-sync.mjs && NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
