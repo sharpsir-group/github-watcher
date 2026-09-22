@@ -248,6 +248,42 @@
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_APPS_TEMPLATE_21"
     },
+    "sharpsir-group/matrix-apps-template-2-2": {
+      "name": "Matrix Apps Template 2.2",
+      "localPath": "/home/bitnami/matrix-apps-template-2-2",
+      "deployPath": "/opt/bitnami/apache/htdocs/apps-template-2-2",
+      "branch": "main",
+      "preBuild": [
+        {
+          "file": "vite.config.ts",
+          "find": "\\n\\s*base:\\s*['\"][^'\"]*['\"],?",
+          "replace": "",
+          "regex": true
+        },
+        {
+          "file": "vite.config.ts",
+          "find": "export default defineConfig(({ mode }) => ({",
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/apps-template-2-2/\","
+        },
+        {
+          "file": "src/App.tsx",
+          "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
+          "replace": "<BrowserRouter basename=\"/apps-template-2-2\">",
+          "regex": true
+        },
+        {
+          "file": "src/lib/matrix-sso.ts",
+          "find": "const BASE_PATH = '[^']*'",
+          "replace": "const BASE_PATH = '/apps-template-2-2'",
+          "regex": true
+        }
+      ],
+      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run build",
+      "distFolder": "dist",
+      "postDeploy": [],
+      "cloudfront": {},
+      "secret": "WEBHOOK_SECRET_APPS_TEMPLATE_22"
+    },
     "sharpsir-group/matrix-stardom": {
       "name": "Matrix Stardom",
       "localPath": "/home/bitnami/matrix-stardom",
