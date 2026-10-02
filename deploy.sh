@@ -104,6 +104,8 @@ if [ "$USE_JQ" = true ]; then
     PRE_BUILD=$(echo "$REPO_CONFIG" | jq -c '.preBuild // []')
     POST_DEPLOY=$(echo "$REPO_CONFIG" | jq -c '.postDeploy // []')
     BUILD_TIMEOUT_SEC=$(echo "$REPO_CONFIG" | jq -r '.buildTimeoutSec // empty')
+    GH_DEPLOY_ENV=$(echo "$REPO_CONFIG" | jq -r '.githubDeployment.environment // empty')
+    GH_DEPLOY_URL=$(echo "$REPO_CONFIG" | jq -r '.githubDeployment.url // empty')
 else
     NAME=$(get_json_value "repo.name")
     LOCAL_PATH=$(get_json_value "repo.localPath")
@@ -114,6 +116,8 @@ else
     PRE_BUILD=$(get_json_value "repo.preBuild || []")
     POST_DEPLOY=$(get_json_value "repo.postDeploy || []")
     BUILD_TIMEOUT_SEC=$(get_json_value "repo.buildTimeoutSec || ''")
+    GH_DEPLOY_ENV=$(get_json_value "(repo.githubDeployment || {}).environment || ''")
+    GH_DEPLOY_URL=$(get_json_value "(repo.githubDeployment || {}).url || ''")
 fi
 
 if [ -z "${BUILD_TIMEOUT_SEC:-}" ] || [ "$BUILD_TIMEOUT_SEC" = "null" ]; then
@@ -157,6 +161,8 @@ NEW_RELEASE=""
 TARGET_SHA=""
 SWAP_DONE=0
 PATCHES_APPLIED=0
+GH_DEPLOYMENT_ID=""
+ROLLED_BACK=0
 
 # --- helpers ---
 
@@ -191,6 +197,45 @@ classify_build_failure() {
         return
     fi
     echo "$EXIT_BUILD"
+}
+
+# --- GitHub Deployments (opt-in via "githubDeployment": {"environment": ...}) ---
+# Reporting only: every failure here is a warning and never fails the deploy.
+# Uses the gh CLI login of the watcher user.
+
+gh_deployment_start() {
+    [ -n "${GH_DEPLOY_ENV:-}" ] || return 0
+    command -v gh >/dev/null 2>&1 || { log_warning "githubDeployment: gh CLI not found; skipping"; return 0; }
+    command -v jq >/dev/null 2>&1 || { log_warning "githubDeployment: jq not found; skipping"; return 0; }
+    local slug="${REPO_KEY%@*}"
+    local payload id
+    payload=$(jq -n --arg ref "$TARGET_SHA" --arg env "$GH_DEPLOY_ENV" --arg desc "github-watcher: $NAME" \
+        '{ref: $ref, environment: $env, description: $desc, auto_merge: false, required_contexts: [],
+          production_environment: true, transient_environment: false}') || return 0
+    if ! id=$(echo "$payload" | timeout 20 gh api -X POST "repos/$slug/deployments" --input - --jq '.id' 2>&1); then
+        log_warning "githubDeployment: create failed: $id"
+        return 0
+    fi
+    GH_DEPLOYMENT_ID="$id"
+    log "githubDeployment: created deployment $GH_DEPLOYMENT_ID ($GH_DEPLOY_ENV) for $TARGET_SHA"
+    gh_deployment_status in_progress "Building $TARGET_SHA" || true
+}
+
+gh_deployment_status() {
+    [ -n "${GH_DEPLOYMENT_ID:-}" ] || return 0
+    local state="$1" desc="$2"
+    local slug="${REPO_KEY%@*}"
+    local url="${GH_DEPLOY_URL:-https://intranet.sharpsir.group/${APP_SUBPATH}/}"
+    local payload out
+    payload=$(jq -n --arg state "$state" --arg desc "${desc:0:140}" --arg url "$url" \
+        '{state: $state, description: $desc, environment_url: $url, auto_inactive: true}') || return 0
+    if ! out=$(echo "$payload" | timeout 20 gh api -X POST "repos/$slug/deployments/$GH_DEPLOYMENT_ID/statuses" --input - --jq '.state' 2>&1); then
+        log_warning "githubDeployment: status '$state' failed: $out"
+        return 0
+    fi
+    log "githubDeployment: status $out"
+    # Terminal states are reported once; a later trap must not overwrite them.
+    case "$state" in success|failure|error) GH_DEPLOYMENT_ID="" ;; esac
 }
 
 sweep_orphans() {
@@ -236,7 +281,15 @@ cleanup_on_exit() {
     if [ "$SWAP_DONE" -eq 1 ] && [ -n "${PREV_RELEASE:-}" ] && [ "$code" -ne 0 ]; then
         log_warning "Post-swap failure — rolling back to previous release"
         rollback_to "$PREV_RELEASE" || true
+        ROLLED_BACK=1
         SWAP_DONE=0
+    fi
+    if [ "$code" -ne 0 ]; then
+        if [ "$ROLLED_BACK" -eq 1 ]; then
+            gh_deployment_status failure "Deploy failed (exit $code); rolled back to the previous release" || true
+        else
+            gh_deployment_status failure "Deploy failed (exit $code); live site unchanged" || true
+        fi
     fi
     revert_patches || true
     release_lock || true
@@ -743,6 +796,7 @@ main() {
 
     TARGET_SHA=$(git rev-parse "origin/$BRANCH")
     log "Pinned TARGET_SHA=$TARGET_SHA"
+    gh_deployment_start
 
     git checkout "$BRANCH" 2>/dev/null || git checkout -B "$BRANCH" "origin/$BRANCH"
     git reset --hard "$TARGET_SHA"
@@ -851,6 +905,8 @@ main() {
     prune_logs
 
     release_lock
+
+    gh_deployment_status success "Deployed ${TARGET_SHA:0:12}" || true
 
     log "========================================="
     log_success "Deployment completed successfully!"

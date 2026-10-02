@@ -277,6 +277,7 @@ so the repo can stay root-mounted for Lovable preview.
 | `cloudflare` | object | Optional Cloudflare cache purge config |
 | `secret` | string | Key name in `.env` for webhook signature verification |
 | `deployTimeoutMs` | number | Optional per-repo override of the parent watchdog |
+| `githubDeployment` | object | Optional `{ "environment": "<name>", "url": "<live URL>" }`. Reports each deploy to GitHub **Deployments** for that environment (`in_progress` → `success`, or `failure` incl. after auto-rollback) via the watcher user's `gh` login. Reporting only: a GitHub API error is logged as a warning and never fails the deploy. Used by prod targets whose promotion runbook reads the green light from the repo's Deployments panel (`gca-ltd/matrix-sales-automation@prod` → `msa-prod`). |
 
 #### Deploy exit codes
 
