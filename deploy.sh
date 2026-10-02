@@ -649,8 +649,21 @@ publish_release() {
     NEW_RELEASE="$RELEASE_BASE/$short_sha"
 
     if [ -d "$NEW_RELEASE" ]; then
-        log_warning "Release dir already exists for $short_sha — replacing"
-        rm -rf "$NEW_RELEASE"
+        local live existing
+        live="$(current_release_target)"
+        existing="$(readlink -f "$NEW_RELEASE" 2>/dev/null || true)"
+        if [ -n "$live" ] && [ "$existing" = "$live" ]; then
+            # Rebuilding the commit that is already being served. Removing this
+            # directory would 404 the live site until the copy finishes, and a
+            # rollback would have nothing to return to because PREV_RELEASE is
+            # this same directory. Publish beside it; the swap stays atomic and
+            # pruning keeps the newest releases.
+            NEW_RELEASE="$RELEASE_BASE/${short_sha}-$(date +%s)"
+            log_warning "Release $short_sha is live — publishing beside it at $(basename "$NEW_RELEASE")"
+        else
+            log_warning "Release dir already exists for $short_sha — replacing"
+            rm -rf "$NEW_RELEASE"
+        fi
     fi
 
     mkdir -p "$NEW_RELEASE"

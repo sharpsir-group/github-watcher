@@ -205,6 +205,21 @@ async function readRemoteSha(localPath, branch, { bypassCache = false } = {}) {
     }
 }
 
+/**
+ * True when the release currently served for this target is already the
+ * remote tip. Used to drop a dirty re-enqueue that would rebuild the commit
+ * just deployed (a reconcile tick during the build marks the target dirty
+ * even though the push was the one in flight).
+ */
+async function deployedMatchesRemote(repoKey) {
+    const config = loadConfig();
+    const entry = config.repos?.[repoKey];
+    if (!entry) return false;
+    const deployed = readDeployedSha(entry.deployPath);
+    const remote = await readRemoteSha(entry.localPath, entry.branch || 'main', { bypassCache: true });
+    return shasMatch(deployed, remote);
+}
+
 /** Prefix-compare short deploy stamps against full remote shas */
 function shasMatch(deployed, remote) {
     if (!deployed || !remote) return false;
@@ -573,7 +588,7 @@ function pump() {
         running.add(repoKey);
         activeDeploys++;
 
-        runDeploy(repoKey, (code) => {
+        runDeploy(repoKey, async (code) => {
             running.delete(repoKey);
             runningMeta.delete(repoKey);
             activeDeploys--;
@@ -588,13 +603,30 @@ function pump() {
                 );
             }
 
-            // Re-enqueue if a push arrived while we were running
+            // Re-enqueue if a push arrived while we were running, unless the
+            // release now served is already that push (the dirty mark came
+            // from a reconcile of the deploy still in flight).
             if (dirty.has(repoKey)) {
                 dirty.delete(repoKey);
-                console.log(
-                    `[${new Date().toISOString()}] Re-enqueueing dirty ${repoKey} after completion`
-                );
-                enqueueDeploy(repoKey, { reason: 'dirty' });
+                let inSync = false;
+                try {
+                    inSync = await deployedMatchesRemote(repoKey);
+                } catch (err) {
+                    console.error(
+                        `[${new Date().toISOString()}] dirty sync check failed for ${repoKey}:`,
+                        err?.message || err
+                    );
+                }
+                if (inSync) {
+                    console.log(
+                        `[${new Date().toISOString()}] dirty but in sync — skipped ${repoKey}`
+                    );
+                } else {
+                    console.log(
+                        `[${new Date().toISOString()}] Re-enqueueing dirty ${repoKey} after completion`
+                    );
+                    enqueueDeploy(repoKey, { reason: 'dirty' });
+                }
             }
 
             const remaining = queue.length;
