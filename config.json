@@ -176,10 +176,10 @@
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_ANALYTICS"
     },
-    "sharpsir-group/matrix-atlas-mls": {
-      "name": "Matrix Atlas MLS",
-      "localPath": "/home/bitnami/matrix-atlas-mls",
-      "deployPath": "/opt/bitnami/apache/htdocs/mls",
+    "gca-ltd/matrix-mls": {
+      "name": "Matrix MLS staging main",
+      "localPath": "/home/bitnami/matrix-mls-staging-main",
+      "deployPath": "/opt/bitnami/apache/htdocs/mls-staging-main",
       "branch": "main",
       "preBuild": [
         {
@@ -191,18 +191,18 @@
         {
           "file": "vite.config.ts",
           "find": "export default defineConfig(({ mode }) => ({",
-          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/mls/\","
+          "replace": "export default defineConfig(({ mode }) => ({\n  base: \"/mls-staging-main/\","
         },
         {
           "file": "src/App.tsx",
           "find": "<BrowserRouter(\\s+basename=\"[^\"]*\")?>",
-          "replace": "<BrowserRouter basename=\"/mls\">",
+          "replace": "<BrowserRouter basename=\"/mls-staging-main\">",
           "regex": true
         },
         {
           "file": "src/lib/matrix-sso.ts",
           "find": "const BASE_PATH = '[^']*'",
-          "replace": "const BASE_PATH = '/mls'",
+          "replace": "const BASE_PATH = '/mls-staging-main'",
           "regex": true
         }
       ],
@@ -210,7 +210,7 @@
       "distFolder": "dist",
       "postDeploy": [],
       "cloudfront": {},
-      "secret": "WEBHOOK_SECRET_ATLAS"
+      "secret": "WEBHOOK_SECRET_MLS_STAGING_MAIN"
     },
     "sharpsir-group/matrix-apps-template-2-1": {
       "name": "Matrix Apps Template 2.1",
