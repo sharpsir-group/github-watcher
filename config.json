@@ -437,7 +437,8 @@
       "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run build",
       "distFolder": "dist",
       "postDeploy": [
-        "bash /home/bitnami/matrix-sa-staging-main/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH"
+        "bash /home/bitnami/matrix-sa-staging-main/scripts/patch-share-og-htaccess.sh $DEPLOY_PATH",
+        "bash /home/bitnami/matrix-sa-staging-main/scripts/deploy-mcp-server.sh || true"
       ],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_MSA"
@@ -565,22 +566,6 @@
       "postDeploy": [],
       "cloudfront": {},
       "secret": "WEBHOOK_SECRET_COMMS"
-    },
-    "gca-ltd/matrix-sa-mcp": {
-      "name": "MSA MCP server",
-      "localPath": "/home/bitnami/matrix-sa-mcp",
-      "deployPath": "/home/bitnami/github-watcher/services/matrix-sa-mcp",
-      "branch": "main",
-      "preBuild": [],
-      "buildCmd": "rm -rf dist.prev dist.next && NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run guardrails && bash scripts/publish-dist.sh && rm -rf .deploy-stamp && mkdir -p .deploy-stamp && printf '<html><head></head><body></body></html>' > .deploy-stamp/index.html",
-      "distFolder": ".deploy-stamp",
-      "postDeploy": [
-        "pm2 restart matrix-sa-mcp",
-        "sleep 5",
-        "curl -fsS http://127.0.0.1:3520/msa/mcp/health"
-      ],
-      "cloudfront": {},
-      "secret": "WEBHOOK_SECRET_MSA_MCP"
     }
   },
   "deployTimeoutMs": 1200000
