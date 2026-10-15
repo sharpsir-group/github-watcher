@@ -572,7 +572,7 @@
       "deployPath": "/home/bitnami/github-watcher/services/matrix-sa-mcp",
       "branch": "main",
       "preBuild": [],
-      "buildCmd": "NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run guardrails && bash scripts/publish-dist.sh && rm -rf .deploy-stamp && mkdir -p .deploy-stamp && printf '<html><head></head><body></body></html>' > .deploy-stamp/index.html",
+      "buildCmd": "rm -rf dist.prev dist.next && NODE_OPTIONS='--dns-result-order=ipv4first' npm install --include=dev --prefer-online --no-audit --no-fund && npm run guardrails && bash scripts/publish-dist.sh && rm -rf .deploy-stamp && mkdir -p .deploy-stamp && printf '<html><head></head><body></body></html>' > .deploy-stamp/index.html",
       "distFolder": ".deploy-stamp",
       "postDeploy": [
         "pm2 restart matrix-sa-mcp",
