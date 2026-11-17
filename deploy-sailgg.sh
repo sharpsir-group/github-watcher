@@ -21,10 +21,16 @@ export NITRO_PRESET=node-server
 BUILD_NODE="/opt/node22/bin/node"
 BUILD_HEAP_MB=512
 BUILD_MEM_MAX="640M"
-BUILD_SWAP_MAX="256M"
+BUILD_SWAP_MAX="1G"
+BUILD_TIMEOUT_SEC=840
 export NODE_OPTIONS="--dns-result-order=ipv4first --max-old-space-size=${BUILD_HEAP_MB}"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+
+cleanup_build() {
+  systemctl --user stop sailgg-build.scope 2>/dev/null || true
+}
+trap cleanup_build EXIT INT TERM
 
 rollback_to() {
   local prev="$1"
@@ -58,9 +64,14 @@ if ! flock -n 9; then
 fi
 
 MEM_AVAIL_KB="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
-log "MemAvailable ${MEM_AVAIL_KB} kB (build heap ${BUILD_HEAP_MB} MiB, cgroup max ${BUILD_MEM_MAX})"
+SWAP_FREE_KB="$(awk '/SwapFree:/ {print $2}' /proc/meminfo)"
+log "MemAvailable ${MEM_AVAIL_KB} kB, SwapFree ${SWAP_FREE_KB} kB (heap ${BUILD_HEAP_MB} MiB, cgroup max ${BUILD_MEM_MAX}, swap cap ${BUILD_SWAP_MAX})"
+if [ "${MEM_AVAIL_KB:-0}" -lt 150000 ] && [ "${SWAP_FREE_KB:-0}" -lt 200000 ]; then
+  log "ERROR: host too tight for build — retry when memory is free"
+  exit 20
+fi
 if [ "${MEM_AVAIL_KB:-0}" -lt 180000 ]; then
-  log "WARN: under 180 MiB available — build stays inside its cgroup and may use a little swap"
+  log "WARN: under 180 MiB available — build may use swap inside cgroup"
 fi
 
 if [ ! -d "$LOCAL_PATH/.git" ]; then
@@ -84,13 +95,16 @@ fi
 log "Installing dependencies (bun)..."
 bun install --frozen-lockfile 2>/dev/null || bun install
 
-log "Building with $BUILD_NODE (NITRO_PRESET=node-server)..."
+log "Building with $BUILD_NODE (NITRO_PRESET=node-server, timeout ${BUILD_TIMEOUT_SEC}s)..."
 rm -rf .output
-if ! systemd-run --user --scope \
-  -p "MemoryHigh=480M" \
+systemctl --user stop sailgg-build.scope 2>/dev/null || true
+if ! systemd-run --user --scope --unit=sailgg-build \
   -p "MemoryMax=${BUILD_MEM_MAX}" \
   -p "MemorySwapMax=${BUILD_SWAP_MAX}" \
-  -- "$BUILD_NODE" --max-old-space-size="$BUILD_HEAP_MB" ./node_modules/vite/bin/vite.js build \
+  -p "RuntimeMaxSec=900" \
+  --working-directory="$LOCAL_PATH" \
+  -- bash -c 'exec 9>&-; exec timeout -k 20s "$1" "$2" --max-old-space-size="$3" ./node_modules/vite/bin/vite.js build' \
+  bash "$BUILD_TIMEOUT_SEC" "$BUILD_NODE" "$BUILD_HEAP_MB" \
   >"$BUILD_LOG" 2>&1; then
   log "ERROR: build failed (see $BUILD_LOG)"
   tail -30 "$BUILD_LOG"

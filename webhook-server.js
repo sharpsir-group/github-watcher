@@ -184,8 +184,8 @@ async function readRemoteSha(localPath, branch, { bypassCache = false } = {}) {
                 timeout: 30000,
                 env: {
                     ...process.env,
-                    PATH: '/opt/bitnami/node/bin:/usr/local/bin:/usr/bin:/bin',
-                    HOME: '/home/bitnami',
+                    PATH: '/home/digitalpeers/.bun/bin:/opt/bitnami/node/bin:/usr/local/bin:/usr/bin:/bin',
+                    HOME: process.env.HOME || '/home/digitalpeers',
                     GIT_TERMINAL_PROMPT: '0'
                 }
             }
@@ -670,8 +670,15 @@ function runDeploy(repoKey, callback) {
         detached: true, // own process group for watchdog kill
         env: {
             ...process.env,
-            PATH: '/opt/bitnami/node/bin:/usr/local/bin:/usr/bin:/bin',
-            HOME: '/home/bitnami',
+            PATH: [
+                '/home/digitalpeers/.bun/bin',
+                '/opt/bitnami/node/bin',
+                '/usr/local/bin',
+                '/usr/bin',
+                '/bin',
+            ].join(':'),
+            HOME: process.env.HOME || '/home/digitalpeers',
+            RELEASES_ROOT: process.env.RELEASES_ROOT || '/var/www/releases/sailgg',
             ...dotenv
         }
     });
@@ -683,12 +690,13 @@ function runDeploy(repoKey, callback) {
     let settled = false;
     let killTimer = null;
     let hardKillTimer = null;
+    let watchdogFired = false;
 
     const settle = (code) => {
         if (settled) return;
         settled = true;
         if (killTimer) clearTimeout(killTimer);
-        if (hardKillTimer) clearTimeout(hardKillTimer);
+        if (hardKillTimer && !watchdogFired) clearTimeout(hardKillTimer);
         callback(code, output, errorOutput);
     };
 
@@ -716,11 +724,13 @@ function runDeploy(repoKey, callback) {
 
     // Watchdog: SIGTERM the process group, then SIGKILL after 30s
     killTimer = setTimeout(() => {
+        watchdogFired = true;
         console.error(
             `[${new Date().toISOString()}] Deploy watchdog fired for ${repoKey} ` +
             `after ${timeoutMs}ms — sending SIGTERM to pgid ${deploy.pid}`
         );
         killProcessGroup(deploy.pid, 'SIGTERM');
+        execFile('systemctl', ['--user', 'stop', 'sailgg-build.scope'], () => {});
         hardKillTimer = setTimeout(() => {
             console.error(
                 `[${new Date().toISOString()}] Deploy watchdog hard-kill for ${repoKey} ` +
